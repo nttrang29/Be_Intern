@@ -1,0 +1,12 @@
+# Node / React
+node_modules/
+dist/
+.env
+# Java / Spring Boot
+target/
+*.log
+*.iml
+.idea/
+# OS junk
+.DS_Store
+Thumbs.db
