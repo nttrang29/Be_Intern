@@ -10,12 +10,21 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
-    public void sendVerificationEmail(String to, String code) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(to);
-        message.setSubject("Mã xác nhận đăng ký tài khoản");
-        message.setText("Mã xác nhận của bạn là: " + code + "\n\n"
-                + "Nếu bạn không yêu cầu mã này, hãy bỏ qua email này.");
-        mailSender.send(message);
+    // Đăng ký
+    public void sendRegistrationVerificationEmail(String to, String code) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(to);
+        msg.setSubject("Xác minh tài khoản đăng ký");
+        msg.setText("Mã xác minh: " + code + "\nHiệu lực 10 phút.");
+        mailSender.send(msg);
+    }
+
+    // Khôi phục mật khẩu
+    public void sendPasswordResetEmail(String to, String code) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(to);
+        msg.setSubject("Khôi phục mật khẩu");
+        msg.setText("Mã xác thực: " + code + "\nHiệu lực 10 phút.\nBỏ qua nếu không yêu cầu.");
+        mailSender.send(msg);
     }
 }

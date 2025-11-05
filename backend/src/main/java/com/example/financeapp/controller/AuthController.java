@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
@@ -80,7 +82,7 @@ public class AuthController {
         userRepository.save(newUser);
 
         // ✅ Gửi mã xác nhận về email
-        emailService.sendVerificationEmail(email, verificationCode);
+        emailService.sendRegistrationVerificationEmail(email, verificationCode);
 
         res.put("message", "Đăng ký thành công. Vui lòng kiểm tra email để xác minh tài khoản.");
         return res;
@@ -199,6 +201,58 @@ public class AuthController {
     public Map<String, String> logout() {
         Map<String, String> res = new HashMap<>();
         res.put("message", "Đăng xuất thành công (xóa token ở client)");
+        return res;
+    }
+    @PostMapping("/forgot-password")
+    public Map<String, Object> forgotPassword(@RequestBody Map<String, String> req) {
+        Map<String, Object> res = new HashMap<>();
+        String email = req.get("email");
+        if (email == null || !userRepository.existsByEmail(email)) {
+            res.put("error", "Email không tồn tại");
+            return res;
+        }
+        String otp = String.format("%06d", new Random().nextInt(999999));
+        User user = userRepository.findByEmail(email).get();
+        user.setVerificationCode(otp);
+        user.setCodeGeneratedAt(LocalDateTime.now());
+        userRepository.save(user);
+        emailService.sendPasswordResetEmail(email, otp);
+        res.put("message", "Mã xác thực đã gửi đến email");
+        return res;
+    }
+    @PostMapping("/reset-password")
+    public Map<String, Object> resetPassword(@RequestBody Map<String, String> req) {
+        Map<String, Object> res = new HashMap<>();
+        String email = req.get("email");
+        String otp = req.get("Mã xác thực");
+        String newPassword = req.get("newPassword");
+        String confirmPassword = req.get("confirmPassword");
+
+        if (email == null || otp == null || newPassword == null || confirmPassword == null) {
+            res.put("error", "Thiếu thông tin");
+            return res;
+        }
+        if (!newPassword.equals(confirmPassword)) {
+            res.put("error", "Mật khẩu xác nhận không khớp");
+            return res;
+        }
+
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null || !otp.equals(user.getVerificationCode())) {
+            res.put("error", "Mã xác thực sai");
+            return res;
+        }
+        if (Duration.between(user.getCodeGeneratedAt(), LocalDateTime.now()).toMinutes() > 10) {
+            res.put("error", "Mã xác thực hết hạn");
+            return res;
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setVerificationCode(null);
+        user.setCodeGeneratedAt(null);
+        userRepository.save(user);
+
+        res.put("message", "Đổi mật khẩu thành công");
         return res;
     }
 }
