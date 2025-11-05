@@ -31,6 +31,17 @@ public class AuthController {
 
     @Autowired
     private RecaptchaService recaptchaService;
+    private boolean isStrongPassword(String password) {
+        if (password == null || password.length() < 8) return false;
+        boolean hasUpper = false, hasLower = false, hasDigit = false, hasSpecial = false;
+        for (char c : password.toCharArray()) {
+            if (Character.isUpperCase(c)) hasUpper = true;
+            else if (Character.isLowerCase(c)) hasLower = true;
+            else if (Character.isDigit(c)) hasDigit = true;
+            else if ("!@#$%^&*()_+-=[]{}|;:,.<>?".indexOf(c) >= 0) hasSpecial = true;
+        }
+        return hasUpper && hasLower && hasDigit && hasSpecial;
+    }
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -49,6 +60,10 @@ public class AuthController {
         // kiểm tra dữ liệu đầu vào
         if (fullName == null || email == null || password == null || confirmPassword == null || recaptchaToken == null) {
             res.put("error", "Thiếu thông tin đăng ký hoặc CAPTCHA (vui lòng gửi fullName, email, password, confirmPassword, recaptchaToken)");
+            return res;
+        }
+        if (!isStrongPassword(password)) {
+            res.put("error", "Mật khẩu phải ≥8 ký tự, có chữ hoa, thường, số, ký tự đặc biệt");
             return res;
         }
         // kiểm tra password confirm
@@ -207,6 +222,7 @@ public class AuthController {
     public Map<String, Object> forgotPassword(@RequestBody Map<String, String> req) {
         Map<String, Object> res = new HashMap<>();
         String email = req.get("email");
+
         if (email == null || !userRepository.existsByEmail(email)) {
             res.put("error", "Email không tồn tại");
             return res;
@@ -228,6 +244,11 @@ public class AuthController {
         String newPassword = req.get("newPassword");
         String confirmPassword = req.get("confirmPassword");
 
+
+        if (!isStrongPassword(newPassword)) {
+            res.put("error", "Mật khẩu mới phải ≥8 ký tự, có chữ hoa, thường, số, ký tự đặc biệt");
+            return res;
+        }
         if (email == null || otp == null || newPassword == null || confirmPassword == null) {
             res.put("error", "Thiếu thông tin");
             return res;
