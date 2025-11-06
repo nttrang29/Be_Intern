@@ -1,38 +1,81 @@
 package com.example.financeapp.security;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@RequiredArgsConstructor
 public class WebSecurityConfig {
 
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Order(1) // chạy sau oauthChain
+    SecurityFilterChain apiChain(HttpSecurity http) throws Exception {
         http
-                // Tắt CSRF cho môi trường phát triển
                 .csrf(csrf -> csrf.disable())
-
-                // Cấu hình quyền truy cập
+                .cors(Customizer.withDefaults())
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+
+                        // ✅ CORS preflight
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // ✅ Static / public (nếu dùng)
                         .requestMatchers(
-                                "/auth/**",         // cho phép đăng nhập, đăng ký
-                                "/oauth2/**",       // cho phép Google OAuth2
-                                "/error"            // cho phép error page
+                                "/", "/index.html", "/assets/**", "/static/**", "/css/**", "/js/**", "/images/**"
                         ).permitAll()
-                        .anyRequest().authenticated() // các request khác yêu cầu xác thực
+
+                        // ✅ Swagger / OpenAPI (nếu dùng springdoc)
+                        .requestMatchers(
+                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
+                        ).permitAll()
+
+                        // ✅ Public Auth APIs
+                        .requestMatchers(
+                                "/auth/login",
+                                "/auth/register",
+                                "/auth/me",
+                                "/auth/verify/**",
+                                "/auth/forgot-password",
+                                "/auth/reset-password"
+                        ).permitAll()
+
+                        // ✅ Các API đổi mật khẩu bằng OTP – BẮT BUỘC đăng nhập (Bearer)
+                        .requestMatchers(
+                                "/auth/change-password/request-otp",
+                                "/auth/change-password/confirm",
+                                "/auth/change-password/resend-otp"
+                        ).authenticated()
+
+                        // (Tuỳ chọn) Cho phép GET "/" nếu bạn muốn test nhanh
+                        .requestMatchers(HttpMethod.GET, "/").permitAll()
+
+                        // ✅ còn lại phải có JWT
+                        .anyRequest().authenticated()
                 )
 
-                // Bật đăng nhập OAuth2 (Google)
-                .oauth2Login(oauth2 -> oauth2
-                        // URL trả về sau khi login Google thành công
-                        .defaultSuccessUrl("/auth/google/success", true)
-                )
+                // ✅ JWT filter
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-                // Bật httpBasic để test nhanh với Postman (tùy chọn)
-                .httpBasic(httpBasic -> {});
+        // (Tuỳ chọn) Nếu dùng H2 console:
+        // http.headers(h -> h.frameOptions(f -> f.sameOrigin()));
 
         return http.build();
+    }
+
+    @Bean
+    AuthenticationManager authenticationManager(AuthenticationConfiguration conf) throws Exception {
+        return conf.getAuthenticationManager();
     }
 }

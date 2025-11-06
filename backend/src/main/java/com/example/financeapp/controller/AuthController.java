@@ -8,6 +8,7 @@ import com.example.financeapp.repository.UserRepository;
 import com.example.financeapp.service.EmailService;
 import com.example.financeapp.service.RecaptchaService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -72,18 +73,37 @@ public class AuthController {
             return res;
         }
 
-        // ✅ Kiểm tra CAPTCHA
-        if (!recaptchaService.verifyToken(recaptchaToken)) {
-            res.put("error", "CAPTCHA không hợp lệ");
-            return res;
+        // AuthController.java - trong phương thức register
+// ...
+
+        // ✅ Kiểm tra email trùng và trạng thái tài khoản
+        Optional<User> existingUserOpt = userRepository.findByEmail(email);
+
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+
+            if (existingUser.isEnabled()) {
+                // Trường hợp 1: Tài khoản đã được kích hoạt -> lỗi thực sự
+                res.put("error", "Email đã được sử dụng và tài khoản đã được kích hoạt. Vui lòng đăng nhập.");
+                return res;
+            } else {
+                // Trường hợp 2: Tài khoản đã tồn tại NHƯNG chưa được kích hoạt -> Cập nhật mã và gửi lại email
+                String newVerificationCode = String.format("%06d", new Random().nextInt(1_000_000));
+
+                // Cập nhật các trường có thể thay đổi (tên, mật khẩu nếu người dùng đã thay đổi)
+                existingUser.setFullName(fullName);
+                existingUser.setPasswordHash(passwordEncoder.encode(password)); // Cập nhật mật khẩu mới
+                existingUser.setVerificationCode(newVerificationCode);
+
+                userRepository.save(existingUser);
+                emailService.sendRegistrationVerificationEmail(email, newVerificationCode);
+
+                res.put("message", "Đăng ký thành công. Vui lòng kiểm tra email để xác minh tài khoản.");
+                return res;
+            }
         }
 
-        // ✅ Kiểm tra email trùng
-        if (userRepository.existsByEmail(email)) {
-            res.put("error", "Email đã được sử dụng");
-            return res;
-        }
-
+        // Nếu email chưa tồn tại, tiếp tục quá trình đăng ký mới như cũ
         // ✅ Tạo mã xác minh 6 chữ số
         String verificationCode = String.format("%06d", new Random().nextInt(1_000_000));
 
@@ -158,14 +178,14 @@ public class AuthController {
 
         Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
         if (userOpt.isEmpty()) {
-            res.put("error", "Email không tồn tại");
+            res.put("error", "Tài khoản không tồn tại.");
             return res;
         }
 
         User user = userOpt.get();
 
         if (!user.isEnabled()) {
-            res.put("error", "Tài khoản chưa được xác minh. Vui lòng kiểm tra email.");
+            res.put("error", "Tài khoản không tồn tại.");
             return res;
         }
 
@@ -212,30 +232,28 @@ public class AuthController {
     // -----------------------------
     // 🚪 ĐĂNG XUẤT
     // -----------------------------
-    @PostMapping("/logout")
-    public Map<String, String> logout() {
-        Map<String, String> res = new HashMap<>();
-        res.put("message", "Đăng xuất thành công (xóa token ở client)");
-        return res;
-    }
     @PostMapping("/forgot-password")
-    public Map<String, Object> forgotPassword(@RequestBody Map<String, String> req) {
+    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody Map<String, String> req) {
         Map<String, Object> res = new HashMap<>();
         String email = req.get("email");
 
         if (email == null || !userRepository.existsByEmail(email)) {
-            res.put("error", "Email không tồn tại");
-            return res;
+            res.put("error", "Email chưa được đăng kí");
+            return ResponseEntity.badRequest().body(res); // 400
         }
+
+        // Chỉ gửi OTP nếu email tồn tại
         String otp = String.format("%06d", new Random().nextInt(999999));
         User user = userRepository.findByEmail(email).get();
         user.setVerificationCode(otp);
         user.setCodeGeneratedAt(LocalDateTime.now());
         userRepository.save(user);
         emailService.sendPasswordResetEmail(email, otp);
+
         res.put("message", "Mã xác thực đã gửi đến email");
-        return res;
+        return ResponseEntity.ok(res);
     }
+
     @PostMapping("/reset-password")
     public Map<String, Object> resetPassword(@RequestBody Map<String, String> req) {
         Map<String, Object> res = new HashMap<>();
