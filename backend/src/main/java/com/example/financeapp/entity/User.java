@@ -18,8 +18,8 @@ public class User {
     @Column(name = "email", unique = true, nullable = false)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
-    private String passwordHash;
+    @Column(name = "password_hash")
+    private String passwordHash; // Có thể null cho OAuth2 users
 
     @Column(name = "provider")
     private String provider; // "local" hoặc "google"
@@ -33,6 +33,9 @@ public class User {
 
     @Column(name = "code_generated_at")
     private LocalDateTime codeGeneratedAt; // Thời gian tạo mã
+
+    @Column(name = "avatar", columnDefinition = "TEXT")
+    private String avatar; // URL hoặc base64 của avatar
 
     // --- Getters & Setters ---
 
@@ -98,5 +101,13 @@ public class User {
 
     public void setCodeGeneratedAt(LocalDateTime codeGeneratedAt) {
         this.codeGeneratedAt = codeGeneratedAt;
+    }
+
+    public String getAvatar() {
+        return avatar;
+    }
+
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
     }
 }
