@@ -35,7 +35,7 @@ public class WebSecurityConfig {
 
                         // ✅ Static / public (nếu dùng)
                         .requestMatchers(
-                                "/", "/index.html", "/assets/**", "/static/**", "/css/**", "/js/**", "/images/**"
+                                "/", "/index.html","/wallets/**", "/assets/**", "/static/**", "/css/**", "/js/**", "/images/**"
                         ).permitAll()
 
                         // ✅ Swagger / OpenAPI (nếu dùng springdoc)
@@ -71,8 +71,6 @@ public class WebSecurityConfig {
                 // ✅ JWT filter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        // (Tuỳ chọn) Nếu dùng H2 console:
-        // http.headers(h -> h.frameOptions(f -> f.sameOrigin()));
 
         return http.build();
     }
