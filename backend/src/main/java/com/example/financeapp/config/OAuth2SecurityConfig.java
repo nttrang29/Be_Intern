@@ -2,6 +2,7 @@ package com.example.financeapp.config;
 
 import com.example.financeapp.repository.UserRepository;
 import com.example.financeapp.security.OAuth2LoginSuccessHandler;
+import com.example.financeapp.service.EmailService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -15,20 +16,28 @@ public class OAuth2SecurityConfig {
     private final JwtUtil jwtUtil;
     private final ClientRegistrationRepository clientRegistrationRepository;
     private final UserRepository userRepository;
+    private final PasswordUtil passwordUtil;
+    private final EmailService emailService;
 
     public OAuth2SecurityConfig(JwtUtil jwtUtil, 
                                 ClientRegistrationRepository clientRegistrationRepository,
-                                UserRepository userRepository) {
+                                UserRepository userRepository,
+                                PasswordUtil passwordUtil,
+                                EmailService emailService) {
         this.jwtUtil = jwtUtil;
         this.clientRegistrationRepository = clientRegistrationRepository;
         this.userRepository = userRepository;
+        this.passwordUtil = passwordUtil;
+        this.emailService = emailService;
     }
 
     @Bean
     @Order(0)
     SecurityFilterChain oauthChain(HttpSecurity http) throws Exception {
         String FE = "http://localhost:3000"; // FE thật của bạn hiện đang chạy 3000
-        var successHandler = new OAuth2LoginSuccessHandler(FE + "/oauth/callback", jwtUtil, userRepository);
+        var successHandler = new OAuth2LoginSuccessHandler(
+            FE + "/oauth/callback", jwtUtil, userRepository, passwordUtil, emailService
+        );
 
         var customResolver = new CustomOAuth2AuthorizationRequestResolver(
                 clientRegistrationRepository,

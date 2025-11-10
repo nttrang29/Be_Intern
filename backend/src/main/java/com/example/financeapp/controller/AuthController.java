@@ -33,6 +33,10 @@ public class AuthController {
 
     @Autowired
     private RecaptchaService recaptchaService;
+    
+    @Autowired
+    private com.example.financeapp.config.PasswordUtil passwordUtil;
+    
     private boolean isStrongPassword(String password) {
         if (password == null || password.length() < 8) return false;
         boolean hasUpper = false, hasLower = false, hasDigit = false, hasSpecial = false;
@@ -190,6 +194,12 @@ public class AuthController {
             return res;
         }
 
+        // Kiểm tra nếu user chưa có mật khẩu (đăng nhập bằng Google)
+        if (user.getPasswordHash() == null || user.getPasswordHash().trim().isEmpty()) {
+            res.put("error", "Tài khoản này đăng nhập bằng Google. Vui lòng đăng nhập bằng Google hoặc đặt mật khẩu trong phần hồ sơ.");
+            return res;
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             res.put("error", "Sai mật khẩu");
             return res;
@@ -314,16 +324,176 @@ public class AuthController {
             }
             
             User user = userOpt.get();
+            
+            // Kiểm tra xem có mật khẩu hay không
+            boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().trim().isEmpty();
+            
+            // Kiểm tra xem có phải mật khẩu mặc định không
+            boolean isDefaultPassword = false;
+            if (hasPassword) {
+                isDefaultPassword = passwordUtil.isDefaultPassword(user.getEmail(), user.getPasswordHash());
+            }
+            
             res.put("userId", user.getUserId());
             res.put("fullName", user.getFullName());
             res.put("email", user.getEmail());
             res.put("provider", user.getProvider());
             res.put("avatar", user.getAvatar());
             res.put("enabled", user.isEnabled());
+            res.put("hasPassword", hasPassword);
+            res.put("isDefaultPassword", isDefaultPassword); // Thêm trường để FE biết
             
             return ResponseEntity.ok(res);
         } catch (Exception e) {
             res.put("error", "Không thể lấy thông tin user");
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    // -----------------------------
+    // 🔑 KIỂM TRA USER CÓ MẬT KHẨU HAY KHÔNG (cho Google users)
+    // -----------------------------
+    @GetMapping("/has-password")
+    public ResponseEntity<Map<String, Object>> hasPassword() {
+        Map<String, Object> res = new HashMap<>();
+        
+        try {
+            String email = SecurityContextHolder.getContext().getAuthentication().getName();
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            
+            if (userOpt.isEmpty()) {
+                res.put("error", "User không tồn tại");
+                return ResponseEntity.status(404).body(res);
+            }
+            
+            User user = userOpt.get();
+            
+            // Kiểm tra xem có mật khẩu hay không
+            boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().trim().isEmpty();
+            
+            // Kiểm tra xem có phải mật khẩu mặc định không
+            boolean isDefault = false;
+            if (hasPassword) {
+                isDefault = passwordUtil.isDefaultPassword(email, user.getPasswordHash());
+            }
+            
+            res.put("hasPassword", hasPassword);
+            res.put("isDefaultPassword", isDefault);
+            res.put("provider", user.getProvider());
+            return ResponseEntity.ok(res);
+            
+        } catch (Exception e) {
+            res.put("error", "Lỗi khi kiểm tra mật khẩu: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    // -----------------------------
+    // 🔐 XEM MẬT KHẨU MẶC ĐỊNH (cho Google users)
+    // -----------------------------
+    @GetMapping("/default-password")
+    public ResponseEntity<Map<String, Object>> getDefaultPassword() {
+        Map<String, Object> res = new HashMap<>();
+        
+        try {
+            String email = SecurityContextHolder.getContext().getAuthentication().getName();
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            
+            if (userOpt.isEmpty()) {
+                res.put("error", "User không tồn tại");
+                return ResponseEntity.status(404).body(res);
+            }
+            
+            User user = userOpt.get();
+            
+            // Chỉ hiển thị mật khẩu mặc định nếu user đang dùng nó
+            if (user.getPasswordHash() != null && 
+                passwordUtil.isDefaultPassword(email, user.getPasswordHash())) {
+                
+                String defaultPassword = passwordUtil.generateDefaultPassword(email);
+                res.put("defaultPassword", defaultPassword);
+                res.put("message", "Bạn đang sử dụng mật khẩu mặc định. Bạn có thể đổi sang mật khẩu tùy chỉnh.");
+                return ResponseEntity.ok(res);
+            } else {
+                res.put("message", "Bạn đã đặt mật khẩu tùy chỉnh");
+                res.put("defaultPassword", null);
+                return ResponseEntity.ok(res);
+            }
+            
+        } catch (Exception e) {
+            res.put("error", "Lỗi khi lấy mật khẩu mặc định: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    // -----------------------------
+    // 🔐 ĐỔI MẬT KHẨU (dành cho cả Google users và local users)
+    // -----------------------------
+    @PutMapping("/change-password")
+    public ResponseEntity<Map<String, Object>> changePassword(@RequestBody Map<String, String> request) {
+        Map<String, Object> res = new HashMap<>();
+        
+        try {
+            String email = SecurityContextHolder.getContext().getAuthentication().getName();
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            
+            if (userOpt.isEmpty()) {
+                res.put("error", "User không tồn tại");
+                return ResponseEntity.status(404).body(res);
+            }
+            
+            User user = userOpt.get();
+            String oldPassword = request.get("oldPassword");
+            String newPassword = request.get("newPassword");
+            String confirmPassword = request.get("confirmPassword");
+            
+            // Validate mật khẩu mới
+            if (newPassword == null || confirmPassword == null) {
+                res.put("error", "Vui lòng nhập mật khẩu mới và xác nhận mật khẩu");
+                return ResponseEntity.badRequest().body(res);
+            }
+            
+            if (!newPassword.equals(confirmPassword)) {
+                res.put("error", "Mật khẩu mới và xác nhận mật khẩu không khớp");
+                return ResponseEntity.badRequest().body(res);
+            }
+            
+            if (!isStrongPassword(newPassword)) {
+                res.put("error", "Mật khẩu mới phải ≥8 ký tự, có chữ hoa, thường, số, ký tự đặc biệt");
+                return ResponseEntity.badRequest().body(res);
+            }
+            
+            // Kiểm tra xem user có mật khẩu mặc định không
+            boolean hasDefaultPassword = passwordUtil.isDefaultPassword(email, user.getPasswordHash());
+            
+            if (!hasDefaultPassword) {
+                // User đã có mật khẩu tùy chỉnh → yêu cầu mật khẩu cũ
+                if (oldPassword == null || oldPassword.isEmpty()) {
+                    res.put("error", "Vui lòng nhập mật khẩu cũ");
+                    return ResponseEntity.badRequest().body(res);
+                }
+                
+                // Verify mật khẩu cũ
+                if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+                    res.put("error", "Mật khẩu cũ không đúng");
+                    return ResponseEntity.badRequest().body(res);
+                }
+            }
+            
+            // Đặt mật khẩu mới
+            user.setPasswordHash(passwordEncoder.encode(newPassword));
+            
+            // Nếu user đang là Google user, giữ nguyên provider
+            // (họ vẫn có thể đăng nhập bằng Google hoặc mật khẩu mới này)
+            
+            userRepository.save(user);
+            
+            res.put("message", "Đổi mật khẩu thành công");
+            res.put("hasPassword", true);
+            return ResponseEntity.ok(res);
+            
+        } catch (Exception e) {
+            res.put("error", "Lỗi khi đổi mật khẩu: " + e.getMessage());
             return ResponseEntity.status(500).body(res);
         }
     }

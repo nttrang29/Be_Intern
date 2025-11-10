@@ -1,8 +1,10 @@
 package com.example.financeapp.security;
 
 import com.example.financeapp.config.JwtUtil;
+import com.example.financeapp.config.PasswordUtil;
 import com.example.financeapp.entity.User;
 import com.example.financeapp.repository.UserRepository;
+import com.example.financeapp.service.EmailService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -19,11 +21,17 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final String frontendCallbackUrl;
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
+    private final PasswordUtil passwordUtil;
+    private final EmailService emailService;
 
-    public OAuth2LoginSuccessHandler(String frontendCallbackUrl, JwtUtil jwtUtil, UserRepository userRepository) {
+    public OAuth2LoginSuccessHandler(String frontendCallbackUrl, JwtUtil jwtUtil, 
+                                     UserRepository userRepository, PasswordUtil passwordUtil,
+                                     EmailService emailService) {
         this.frontendCallbackUrl = frontendCallbackUrl;
         this.jwtUtil = jwtUtil;
         this.userRepository = userRepository;
+        this.passwordUtil = passwordUtil;
+        this.emailService = emailService;
     }
 
     @Override
@@ -46,12 +54,24 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             user = new User();
             user.setEmail(email);
             user.setFullName(name != null ? name : "Google User");
-            user.setPasswordHash(""); // Không cần password cho OAuth2
+            
+            // Tạo mật khẩu mặc định dựa trên email
+            String hashedDefaultPassword = passwordUtil.hashDefaultPassword(email);
+            user.setPasswordHash(hashedDefaultPassword);
+            
             user.setProvider("google");
             user.setEnabled(true); // Google đã xác thực rồi
             user.setAvatar(picture);
             
             userRepository.save(user);
+            
+            // Gửi email thông báo mật khẩu mặc định
+            try {
+                String defaultPassword = passwordUtil.generateDefaultPassword(email);
+                emailService.sendDefaultPasswordEmail(email, name, defaultPassword);
+            } catch (Exception e) {
+                System.err.println("⚠️ Không thể gửi email mật khẩu mặc định: " + e.getMessage());
+            }
         } else {
             // Cập nhật thông tin nếu cần
             user = existingUserOpt.get();
