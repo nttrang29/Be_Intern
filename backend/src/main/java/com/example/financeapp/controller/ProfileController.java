@@ -67,7 +67,6 @@ public class ProfileController {
         userInfo.put("provider", user.getProvider());
         userInfo.put("avatar", user.getAvatar());
         userInfo.put("enabled", user.isEnabled());
-        userInfo.put("hasDefaultPassword", user.isHasDefaultPassword());
 
         res.put("user", userInfo);
         return ResponseEntity.ok(res);
@@ -134,21 +133,19 @@ public class ProfileController {
         }
 
         // Logic đổi mật khẩu:
-        // - Nếu đang dùng mật khẩu mặc định (hasDefaultPassword = true) → KHÔNG cần old password
-        // - Nếu đã đổi sang custom password (hasDefaultPassword = false) → CẦN old password
+        // - Nếu user chưa có password (Google user, passwordHash = null) → ĐẶT mật khẩu lần đầu
+        // - Nếu đã có password → CẦN old password để đổi
         
-        if (user.isHasDefaultPassword()) {
-            // Trường hợp 1: Đổi mật khẩu lần đầu từ mật khẩu mặc định
+        if (user.getPasswordHash() == null || user.getPasswordHash().trim().isEmpty()) {
+            // Trường hợp 1: User chưa có password (Google user đặt password lần đầu)
             // Không cần kiểm tra old password
             user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-            user.setHasDefaultPassword(false); // Đánh dấu đã đổi sang custom password
-            
             userRepository.save(user);
             
-            res.put("message", "Đổi mật khẩu thành công. Bạn đã chuyển từ mật khẩu mặc định sang mật khẩu tùy chỉnh.");
+            res.put("message", "Đặt mật khẩu thành công. Bây giờ bạn có thể đăng nhập bằng email và mật khẩu.");
             return ResponseEntity.ok(res);
         } else {
-            // Trường hợp 2: Đổi mật khẩu lần 2+ (từ custom sang custom khác)
+            // Trường hợp 2: Đổi mật khẩu (đã có password)
             // BẮT BUỘC phải có old password
             
             if (request.getOldPassword() == null || request.getOldPassword().trim().isEmpty()) {
@@ -169,47 +166,6 @@ public class ProfileController {
             res.put("message", "Đổi mật khẩu thành công");
             return ResponseEntity.ok(res);
         }
-    }
-
-    // -----------------------------
-    // ❓ KIỂM TRA CÓ MẬT KHẨU CHƯA
-    // -----------------------------
-    @GetMapping("/has-password")
-    public ResponseEntity<Map<String, Object>> hasPassword() {
-        Map<String, Object> res = new HashMap<>();
-
-        User user = getCurrentUser();
-        if (user == null) {
-            res.put("error", "Không tìm thấy thông tin người dùng");
-            return ResponseEntity.status(401).body(res);
-        }
-
-        boolean hasPassword = user.getPasswordHash() != null && 
-                             !user.getPasswordHash().trim().isEmpty();
-        
-        res.put("hasPassword", hasPassword);
-        return ResponseEntity.ok(res);
-    }
-
-    // -----------------------------
-    // 🔍 KIỂM TRA CÓ ĐANG DÙNG MẬT KHẨU MẶC ĐỊNH KHÔNG
-    // -----------------------------
-    @GetMapping("/default-password")
-    public ResponseEntity<Map<String, Object>> isUsingDefaultPassword() {
-        Map<String, Object> res = new HashMap<>();
-
-        User user = getCurrentUser();
-        if (user == null) {
-            res.put("error", "Không tìm thấy thông tin người dùng");
-            return ResponseEntity.status(401).body(res);
-        }
-
-        res.put("hasDefaultPassword", user.isHasDefaultPassword());
-        res.put("message", user.isHasDefaultPassword() 
-            ? "Bạn đang sử dụng mật khẩu mặc định. Khuyến nghị đổi mật khẩu để bảo mật tài khoản." 
-            : "Bạn đang sử dụng mật khẩu tùy chỉnh.");
-        
-        return ResponseEntity.ok(res);
     }
 }
 

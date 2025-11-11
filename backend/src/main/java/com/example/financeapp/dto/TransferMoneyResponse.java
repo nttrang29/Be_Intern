@@ -1,0 +1,149 @@
+package com.example.financeapp.dto;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * DTO cho response sau khi chuyển tiền thành công
+ * Chứa thông tin về cả 2 transactions (expense và income)
+ */
+public class TransferMoneyResponse {
+
+    // === GENERAL INFO ===
+    private BigDecimal amount;
+    private String currencyCode;
+    private LocalDateTime transferredAt;
+    private String note;
+
+    // === FROM WALLET (SOURCE) INFO ===
+    private Long fromWalletId;
+    private String fromWalletName;
+    private BigDecimal fromWalletBalanceBefore;
+    private BigDecimal fromWalletBalanceAfter;
+    private Long expenseTransactionId; // ID của transaction chi tiêu
+
+    // === TO WALLET (DESTINATION) INFO ===
+    private Long toWalletId;
+    private String toWalletName;
+    private BigDecimal toWalletBalanceBefore;
+    private BigDecimal toWalletBalanceAfter;
+    private Long incomeTransactionId; // ID của transaction thu nhập
+
+    // Constructors
+    public TransferMoneyResponse() {
+    }
+
+    // Getters & Setters
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
+    }
+
+    public LocalDateTime getTransferredAt() {
+        return transferredAt;
+    }
+
+    public void setTransferredAt(LocalDateTime transferredAt) {
+        this.transferredAt = transferredAt;
+    }
+
+    public String getNote() {
+        return note;
+    }
+
+    public void setNote(String note) {
+        this.note = note;
+    }
+
+    public Long getFromWalletId() {
+        return fromWalletId;
+    }
+
+    public void setFromWalletId(Long fromWalletId) {
+        this.fromWalletId = fromWalletId;
+    }
+
+    public String getFromWalletName() {
+        return fromWalletName;
+    }
+
+    public void setFromWalletName(String fromWalletName) {
+        this.fromWalletName = fromWalletName;
+    }
+
+    public BigDecimal getFromWalletBalanceBefore() {
+        return fromWalletBalanceBefore;
+    }
+
+    public void setFromWalletBalanceBefore(BigDecimal fromWalletBalanceBefore) {
+        this.fromWalletBalanceBefore = fromWalletBalanceBefore;
+    }
+
+    public BigDecimal getFromWalletBalanceAfter() {
+        return fromWalletBalanceAfter;
+    }
+
+    public void setFromWalletBalanceAfter(BigDecimal fromWalletBalanceAfter) {
+        this.fromWalletBalanceAfter = fromWalletBalanceAfter;
+    }
+
+    public Long getExpenseTransactionId() {
+        return expenseTransactionId;
+    }
+
+    public void setExpenseTransactionId(Long expenseTransactionId) {
+        this.expenseTransactionId = expenseTransactionId;
+    }
+
+    public Long getToWalletId() {
+        return toWalletId;
+    }
+
+    public void setToWalletId(Long toWalletId) {
+        this.toWalletId = toWalletId;
+    }
+
+    public String getToWalletName() {
+        return toWalletName;
+    }
+
+    public void setToWalletName(String toWalletName) {
+        this.toWalletName = toWalletName;
+    }
+
+    public BigDecimal getToWalletBalanceBefore() {
+        return toWalletBalanceBefore;
+    }
+
+    public void setToWalletBalanceBefore(BigDecimal toWalletBalanceBefore) {
+        this.toWalletBalanceBefore = toWalletBalanceBefore;
+    }
+
+    public BigDecimal getToWalletBalanceAfter() {
+        return toWalletBalanceAfter;
+    }
+
+    public void setToWalletBalanceAfter(BigDecimal toWalletBalanceAfter) {
+        this.toWalletBalanceAfter = toWalletBalanceAfter;
+    }
+
+    public Long getIncomeTransactionId() {
+        return incomeTransactionId;
+    }
+
+    public void setIncomeTransactionId(Long incomeTransactionId) {
+        this.incomeTransactionId = incomeTransactionId;
+    }
+}
+

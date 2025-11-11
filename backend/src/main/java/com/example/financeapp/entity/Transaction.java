@@ -41,6 +41,20 @@ public class Transaction {
     @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
+    // ============ FIELDS CHO CURRENCY CONVERSION (Merge Wallet) ============
+    
+    @Column(name = "original_amount", precision = 15, scale = 2)
+    private BigDecimal originalAmount; // Số tiền gốc trước khi chuyển đổi (nếu có)
+
+    @Column(name = "original_currency", length = 3)
+    private String originalCurrency; // Loại tiền gốc (nếu có chuyển đổi)
+
+    @Column(name = "exchange_rate", precision = 10, scale = 6)
+    private BigDecimal exchangeRate; // Tỷ giá áp dụng (nếu có chuyển đổi)
+
+    @Column(name = "merge_date")
+    private LocalDateTime mergeDate; // Ngày gộp ví (để biết transaction từ merge)
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -85,4 +99,16 @@ public class Transaction {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public BigDecimal getOriginalAmount() { return originalAmount; }
+    public void setOriginalAmount(BigDecimal originalAmount) { this.originalAmount = originalAmount; }
+
+    public String getOriginalCurrency() { return originalCurrency; }
+    public void setOriginalCurrency(String originalCurrency) { this.originalCurrency = originalCurrency; }
+
+    public BigDecimal getExchangeRate() { return exchangeRate; }
+    public void setExchangeRate(BigDecimal exchangeRate) { this.exchangeRate = exchangeRate; }
+
+    public LocalDateTime getMergeDate() { return mergeDate; }
+    public void setMergeDate(LocalDateTime mergeDate) { this.mergeDate = mergeDate; }
 }

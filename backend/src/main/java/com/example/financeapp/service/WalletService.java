@@ -63,20 +63,52 @@ public interface WalletService {
 
     /**
      * Preview kết quả merge trước khi thực hiện
+     * Hỗ trợ xem trước với currency conversion
      */
     com.example.financeapp.dto.MergeWalletPreviewResponse previewMerge(
             Long userId,
             Long sourceWalletId,
-            Long targetWalletId
+            Long targetWalletId,
+            String targetCurrency
     );
 
     /**
-     * Thực hiện gộp ví
+     * Thực hiện gộp ví với hỗ trợ currency conversion
      */
     @Transactional
     com.example.financeapp.dto.MergeWalletResponse mergeWallets(
             Long userId,
             Long sourceWalletId,
-            Long targetWalletId
+            Long targetWalletId,
+            String targetCurrency
+    );
+
+    // ============ WALLET MANAGEMENT METHODS ============
+
+    /**
+     * Cập nhật thông tin ví (chỉ walletName và description)
+     * Chỉ OWNER mới có quyền chỉnh sửa
+     */
+    Wallet updateWallet(Long userId, Long walletId, com.example.financeapp.dto.UpdateWalletRequest request);
+
+    /**
+     * Xóa ví và tất cả dữ liệu liên quan
+     * Chỉ OWNER mới có quyền xóa
+     * Tự động xử lý ví mặc định nếu cần
+     */
+    @Transactional
+    com.example.financeapp.dto.DeleteWalletResponse deleteWallet(Long userId, Long walletId);
+
+    // ============ MONEY TRANSFER METHODS ============
+
+    /**
+     * Chuyển tiền giữa các ví
+     * Tạo 2 transactions: EXPENSE từ ví nguồn và INCOME vào ví đích
+     * User phải có quyền truy cập cả 2 ví
+     */
+    @Transactional
+    com.example.financeapp.dto.TransferMoneyResponse transferMoney(
+            Long userId, 
+            com.example.financeapp.dto.TransferMoneyRequest request
     );
 }

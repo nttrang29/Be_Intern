@@ -17,6 +17,9 @@ public interface WalletRepository extends JpaRepository<Wallet, Long> {
     // Kiểm tra trùng tên ví trong phạm vi User (cho createWallet)
     boolean existsByWalletNameAndUser_UserId(String walletName, Long userId);
 
+    // Tìm ví theo tên và userId (cho updateWallet)
+    Wallet findByWalletNameAndUser_UserId(String walletName, Long userId);
+
     Optional<Wallet> findByWalletIdAndUser_UserId(Long walletId, Long userId);
 
     @Modifying

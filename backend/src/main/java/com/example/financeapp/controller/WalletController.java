@@ -281,12 +281,13 @@ public class WalletController {
 
     /**
      * Preview kết quả merge
-     * GET /wallets/{targetWalletId}/merge-preview?sourceWalletId=X
+     * GET /wallets/{targetWalletId}/merge-preview?sourceWalletId=X&targetCurrency=VND
      */
     @GetMapping("/{targetWalletId}/merge-preview")
     public ResponseEntity<Map<String, Object>> previewMerge(
             @PathVariable Long targetWalletId,
-            @RequestParam Long sourceWalletId) {
+            @RequestParam Long sourceWalletId,
+            @RequestParam String targetCurrency) {
         Map<String, Object> res = new HashMap<>();
         try {
             Long userId = getCurrentUserId();
@@ -294,7 +295,8 @@ public class WalletController {
             MergeWalletPreviewResponse preview = walletService.previewMerge(
                     userId,
                     sourceWalletId,
-                    targetWalletId
+                    targetWalletId,
+                    targetCurrency
             );
 
             res.put("preview", preview);
@@ -310,7 +312,7 @@ public class WalletController {
     }
 
     /**
-     * Thực hiện gộp ví
+     * Thực hiện gộp ví với hỗ trợ currency conversion
      * POST /wallets/{targetWalletId}/merge
      */
     @PostMapping("/{targetWalletId}/merge")
@@ -325,7 +327,8 @@ public class WalletController {
             MergeWalletResponse result = walletService.mergeWallets(
                     userId,
                     request.getSourceWalletId(),
-                    targetWalletId
+                    targetWalletId,
+                    request.getTargetCurrency()
             );
 
             res.put("success", true);
@@ -364,6 +367,88 @@ public class WalletController {
 
         } catch (Exception e) {
             res.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    // ============ WALLET MANAGEMENT ENDPOINTS ============
+
+    /**
+     * Cập nhật thông tin ví (chỉ tên và mô tả)
+     * PUT /wallets/{walletId}
+     */
+    @PutMapping("/{walletId}")
+    public ResponseEntity<Map<String, Object>> updateWallet(
+            @PathVariable Long walletId,
+            @Valid @RequestBody UpdateWalletRequest request) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+
+            Wallet updatedWallet = walletService.updateWallet(userId, walletId, request);
+
+            res.put("message", "Cập nhật ví thành công");
+            res.put("wallet", updatedWallet);
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
+     * Xóa ví
+     * DELETE /wallets/{walletId}
+     */
+    @DeleteMapping("/{walletId}")
+    public ResponseEntity<Map<String, Object>> deleteWallet(@PathVariable Long walletId) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+
+            DeleteWalletResponse deleteResponse = walletService.deleteWallet(userId, walletId);
+
+            res.put("message", "Xóa ví thành công");
+            res.put("deletedWallet", deleteResponse);
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    // ============ MONEY TRANSFER ENDPOINTS ============
+
+    /**
+     * Chuyển tiền giữa các ví
+     * POST /wallets/transfer
+     */
+    @PostMapping("/transfer")
+    public ResponseEntity<Map<String, Object>> transferMoney(
+            @Valid @RequestBody TransferMoneyRequest request) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+
+            TransferMoneyResponse transferResponse = walletService.transferMoney(userId, request);
+
+            res.put("message", "Chuyển tiền thành công");
+            res.put("transfer", transferResponse);
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + e.getMessage());
             return ResponseEntity.status(500).body(res);
         }
     }
