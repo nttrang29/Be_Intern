@@ -65,6 +65,7 @@ public class WalletServiceImpl implements WalletService {
             walletRepository.unsetDefaultWallet(userId, null); // bỏ mặc định tất cả
             wallet.setDefault(true);
         }
+
         Wallet savedWallet = walletRepository.save(wallet);
 
         // 5. Tạo WalletMember với role OWNER
