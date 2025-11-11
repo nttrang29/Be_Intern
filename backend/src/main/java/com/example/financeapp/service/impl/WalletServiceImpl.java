@@ -53,14 +53,18 @@ public class WalletServiceImpl implements WalletService {
             throw new RuntimeException("Bạn đã có ví tên \"" + request.getWalletName() + "\"");
         }
 
-        // 4. Tạo ví mới
         Wallet wallet = new Wallet();
         wallet.setUser(user);
         wallet.setWalletName(request.getWalletName().trim());
         wallet.setCurrencyCode(request.getCurrencyCode().toUpperCase());
         wallet.setBalance(BigDecimal.valueOf(request.getInitialBalance()));
         wallet.setDescription(request.getDescription());
+        wallet.setDefault(false);
 
+        if (Boolean.TRUE.equals(request.getSetAsDefault())) {
+            walletRepository.unsetDefaultWallet(userId, null); // bỏ mặc định tất cả
+            wallet.setDefault(true);
+        }
         Wallet savedWallet = walletRepository.save(wallet);
 
         // 5. Tạo WalletMember với role OWNER
@@ -70,6 +74,15 @@ public class WalletServiceImpl implements WalletService {
         return savedWallet;
     }
 
+    @Override
+    @Transactional
+    public void setDefaultWallet(Long userId, Long walletId) {
+        walletRepository.findByWalletIdAndUser_UserId(walletId, userId)
+                .orElseThrow(() -> new RuntimeException("Ví không tồn tại"));
+
+        walletRepository.unsetDefaultWallet(userId, walletId);
+        walletRepository.setDefaultWallet(userId, walletId);
+    }
     @Override
     public List<Wallet> getWalletsByUserId(Long userId) {
         return walletRepository.findByUser_UserId(userId);

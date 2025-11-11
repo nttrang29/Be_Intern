@@ -54,11 +54,13 @@ public class WebSecurityConfig {
 
                         // ✅ Profile APIs (yêu cầu đăng nhập)
                         .requestMatchers(
+
                                 "/profile",
                                 "/profile/update",
                                 "/profile/change-password",
                                 "/profile/has-password",
-                                "/profile/default-password"
+                                "/profile/default-password",
+                                "/wallets/**"
                         ).authenticated()
 
                         // ✅ Wallet APIs (yêu cầu đăng nhập) - bao gồm shared wallet

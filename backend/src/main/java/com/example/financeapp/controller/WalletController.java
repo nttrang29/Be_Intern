@@ -8,6 +8,7 @@ import com.example.financeapp.entity.User;
 import com.example.financeapp.entity.Wallet;
 import com.example.financeapp.repository.UserRepository;
 import com.example.financeapp.service.WalletService;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -102,6 +103,19 @@ public class WalletController {
         }
     }
 
+    @PatchMapping("/{walletId}/set-default")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> setDefaultWallet(@PathVariable Long walletId) {
+        Map<String, Object> res = new HashMap<>();
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Long userId = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User không tồn tại")).getUserId();
+
+        walletService.setDefaultWallet(userId, walletId);
+
+        res.put("message", "Đặt ví mặc định thành công");
+        return ResponseEntity.ok(res);
+    }
     // ============ SHARED WALLET ENDPOINTS ============
 
     /**

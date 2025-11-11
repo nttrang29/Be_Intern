@@ -4,6 +4,7 @@ import com.example.financeapp.dto.CreateWalletRequest;
 import com.example.financeapp.dto.SharedWalletDTO;
 import com.example.financeapp.dto.WalletMemberDTO;
 import com.example.financeapp.entity.Wallet;
+import jakarta.transaction.Transactional;
 
 import java.util.List;
 
@@ -16,7 +17,8 @@ public interface WalletService {
     Wallet getWalletDetails(Long userId, Long walletId);
 
     // ============ SHARED WALLET METHODS ============
-
+    @Transactional
+    void setDefaultWallet(Long userId, Long walletId);
     /**
      * Lấy tất cả wallets mà user có quyền truy cập (bao gồm owned và shared)
      */

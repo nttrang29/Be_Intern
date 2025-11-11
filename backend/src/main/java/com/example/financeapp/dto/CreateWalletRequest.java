@@ -19,6 +19,9 @@ public class CreateWalletRequest {
     @Size(max = 255, message = "Mô tả không quá 255 ký tự")
     private String description;
 
+
+    private Boolean setAsDefault;
+
     // Getters and Setters
     public String getWalletName() { return walletName; }
     public void setWalletName(String walletName) { this.walletName = walletName; }
@@ -31,4 +34,7 @@ public class CreateWalletRequest {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public Boolean getSetAsDefault() { return setAsDefault; }
+    public void setSetAsDefault(Boolean setAsDefault) { this.setAsDefault = setAsDefault; }
 }
