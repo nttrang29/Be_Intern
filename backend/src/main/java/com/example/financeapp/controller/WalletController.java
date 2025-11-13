@@ -428,6 +428,47 @@ public class WalletController {
     // ============ MONEY TRANSFER ENDPOINTS ============
 
     /**
+     * Lấy danh sách ví có thể chuyển tiền đến từ ví nguồn
+     * GET /wallets/{walletId}/transfer-targets
+     */
+    @GetMapping("/{walletId}/transfer-targets")
+    public ResponseEntity<Map<String, Object>> getTransferTargets(@PathVariable Long walletId) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+
+            // Lấy ví nguồn để biết currency
+            Wallet sourceWallet = walletService.getWalletDetails(userId, walletId);
+            
+            // Lấy tất cả ví có quyền truy cập
+            List<SharedWalletDTO> allWallets = walletService.getAllAccessibleWallets(userId);
+            
+            // Filter: Bỏ ví nguồn và chỉ lấy ví cùng currency
+            List<SharedWalletDTO> targets = allWallets.stream()
+                    .filter(w -> !w.getWalletId().equals(walletId)) // Không phải ví nguồn
+                    .filter(w -> w.getCurrencyCode().equals(sourceWallet.getCurrencyCode())) // Cùng currency
+                    .collect(java.util.stream.Collectors.toList());
+
+            res.put("sourceWallet", Map.of(
+                "walletId", sourceWallet.getWalletId(),
+                "walletName", sourceWallet.getWalletName(),
+                "currencyCode", sourceWallet.getCurrencyCode(),
+                "balance", sourceWallet.getBalance()
+            ));
+            res.put("targetWallets", targets);
+            res.put("total", targets.size());
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
      * Chuyển tiền giữa các ví
      * POST /wallets/transfer
      */

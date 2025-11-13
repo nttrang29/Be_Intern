@@ -29,6 +29,13 @@ public class TransferMoneyResponse {
     private BigDecimal toWalletBalanceAfter;
     private Long incomeTransactionId; // ID của transaction thu nhập
 
+    // === ADDITIONAL INFO ===
+    private Long defaultViewWalletId; // ID của ví mặc định để xem chi tiết (ví nguồn)
+    private Boolean toWalletIsShared; // Ví đích có phải là ví nhóm không
+    private Integer toWalletMemberCount; // Số thành viên của ví đích
+    private Boolean fromWalletIsShared; // Ví nguồn có phải là ví nhóm không
+    private Integer fromWalletMemberCount; // Số thành viên của ví nguồn
+
     // Constructors
     public TransferMoneyResponse() {
     }
@@ -144,6 +151,46 @@ public class TransferMoneyResponse {
 
     public void setIncomeTransactionId(Long incomeTransactionId) {
         this.incomeTransactionId = incomeTransactionId;
+    }
+
+    public Long getDefaultViewWalletId() {
+        return defaultViewWalletId;
+    }
+
+    public void setDefaultViewWalletId(Long defaultViewWalletId) {
+        this.defaultViewWalletId = defaultViewWalletId;
+    }
+
+    public Boolean getToWalletIsShared() {
+        return toWalletIsShared;
+    }
+
+    public void setToWalletIsShared(Boolean toWalletIsShared) {
+        this.toWalletIsShared = toWalletIsShared;
+    }
+
+    public Integer getToWalletMemberCount() {
+        return toWalletMemberCount;
+    }
+
+    public void setToWalletMemberCount(Integer toWalletMemberCount) {
+        this.toWalletMemberCount = toWalletMemberCount;
+    }
+
+    public Boolean getFromWalletIsShared() {
+        return fromWalletIsShared;
+    }
+
+    public void setFromWalletIsShared(Boolean fromWalletIsShared) {
+        this.fromWalletIsShared = fromWalletIsShared;
+    }
+
+    public Integer getFromWalletMemberCount() {
+        return fromWalletMemberCount;
+    }
+
+    public void setFromWalletMemberCount(Integer fromWalletMemberCount) {
+        this.fromWalletMemberCount = fromWalletMemberCount;
     }
 }
 

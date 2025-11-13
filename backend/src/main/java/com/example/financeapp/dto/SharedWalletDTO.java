@@ -16,6 +16,7 @@ public class SharedWalletDTO {
     private Long ownerId;
     private String ownerName;
     private int totalMembers;
+    private boolean isDefault; // ✨ NEW: Ví có phải là ví mặc định không
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -110,6 +111,14 @@ public class SharedWalletDTO {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public boolean isDefault() {
+        return isDefault;
+    }
+
+    public void setDefault(boolean isDefault) {
+        this.isDefault = isDefault;
     }
 }
 

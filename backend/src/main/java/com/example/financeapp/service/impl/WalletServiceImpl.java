@@ -138,6 +138,7 @@ public class WalletServiceImpl implements WalletService {
             dto.setDescription(wallet.getDescription());
             dto.setMyRole(membership.getRole().toString());
             dto.setTotalMembers((int) totalMembers);
+            dto.setDefault(wallet.isDefault()); // ✨ Thêm isDefault
             dto.setCreatedAt(wallet.getCreatedAt());
             dto.setUpdatedAt(wallet.getUpdatedAt());
 
@@ -461,10 +462,11 @@ public class WalletServiceImpl implements WalletService {
         LocalDateTime mergeTime = LocalDateTime.now();
 
         // ===== VALIDATION =====
-        Wallet sourceWallet = walletRepository.findById(sourceWalletId)
+        // ✅ Lock cả 2 ví để tránh race condition khi merge
+        Wallet sourceWallet = walletRepository.findByIdWithLock(sourceWalletId)
                 .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
 
-        Wallet targetWallet = walletRepository.findById(targetWalletId)
+        Wallet targetWallet = walletRepository.findByIdWithLock(targetWalletId)
                 .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
 
         if (!isOwner(sourceWalletId, userId) || !isOwner(targetWalletId, userId)) {
@@ -811,11 +813,13 @@ public class WalletServiceImpl implements WalletService {
             throw new RuntimeException("Không thể chuyển tiền cho chính ví này");
         }
 
-        // 3. Lấy thông tin 2 ví
-        Wallet fromWallet = walletRepository.findById(request.getFromWalletId())
+        // 3. ✅ Lấy thông tin 2 ví với PESSIMISTIC LOCK (tránh race condition)
+        // Khi có 2 requests đồng thời chuyển từ cùng ví, request sau phải đợi request trước
+        // Lock cả 2 ví để đảm bảo balance không bị thay đổi trong quá trình transfer
+        Wallet fromWallet = walletRepository.findByIdWithLock(request.getFromWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
 
-        Wallet toWallet = walletRepository.findById(request.getToWalletId())
+        Wallet toWallet = walletRepository.findByIdWithLock(request.getToWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
 
         // 4. Kiểm tra user có quyền truy cập cả 2 ví không
@@ -863,10 +867,33 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal fromBalanceBefore = fromWallet.getBalance();
         BigDecimal toBalanceBefore = toWallet.getBalance();
 
+        // ===== KIỂM TRA VÍ NHÓM (SHARED WALLET) =====
+        // Đếm số members của cả 2 ví để xác định có phải ví nhóm không
+        long fromWalletMemberCount = walletMemberRepository.countByWallet_WalletId(request.getFromWalletId());
+        long toWalletMemberCount = walletMemberRepository.countByWallet_WalletId(request.getToWalletId());
+        
+        boolean fromWalletIsShared = fromWalletMemberCount > 1;
+        boolean toWalletIsShared = toWalletMemberCount > 1;
+
+        // Log thông tin để debug (có thể xóa sau)
+        System.out.println("[TRANSFER] From Wallet: " + fromWallet.getWalletName() + 
+                         " (Members: " + fromWalletMemberCount + 
+                         ", IsShared: " + fromWalletIsShared + ")");
+        System.out.println("[TRANSFER] To Wallet: " + toWallet.getWalletName() + 
+                         " (Members: " + toWalletMemberCount + 
+                         ", IsShared: " + toWalletIsShared + ")");
+
         // ===== PERFORM TRANSFER =====
         LocalDateTime transferTime = LocalDateTime.now();
 
-        // 1. Tạo transaction CHI TIÊU từ ví nguồn
+        // ✅ FIX: UPDATE BALANCE TRƯỚC, SAU ĐÓ MỚI SAVE TRANSACTION
+        // Điều này đảm bảo transaction luôn phản ánh đúng balance tại thời điểm đó
+        
+        // 1. ✅ Cập nhật balance ví nguồn TRƯỚC
+        fromWallet.setBalance(fromWallet.getBalance().subtract(request.getAmount()));
+        walletRepository.save(fromWallet);
+
+        // 2. Tạo và save transaction CHI TIÊU (khi balance đã đúng)
         Transaction expenseTransaction = new Transaction();
         expenseTransaction.setUser(user);
         expenseTransaction.setWallet(fromWallet);
@@ -880,11 +907,11 @@ public class WalletServiceImpl implements WalletService {
         );
         Transaction savedExpense = transactionRepository.save(expenseTransaction);
 
-        // 2. Cập nhật balance ví nguồn
-        fromWallet.setBalance(fromWallet.getBalance().subtract(request.getAmount()));
-        walletRepository.save(fromWallet);
+        // 3. ✅ Cập nhật balance ví đích TRƯỚC
+        toWallet.setBalance(toWallet.getBalance().add(request.getAmount()));
+        walletRepository.save(toWallet);
 
-        // 3. Tạo transaction THU NHẬP vào ví đích
+        // 4. Tạo và save transaction THU NHẬP (khi balance đã đúng)
         Transaction incomeTransaction = new Transaction();
         incomeTransaction.setUser(user);
         incomeTransaction.setWallet(toWallet);
@@ -897,10 +924,6 @@ public class WalletServiceImpl implements WalletService {
             "Nhận từ: " + fromWallet.getWalletName()
         );
         Transaction savedIncome = transactionRepository.save(incomeTransaction);
-
-        // 4. Cập nhật balance ví đích
-        toWallet.setBalance(toWallet.getBalance().add(request.getAmount()));
-        walletRepository.save(toWallet);
 
         // ===== CREATE RESPONSE =====
         TransferMoneyResponse response = new TransferMoneyResponse();
@@ -924,6 +947,16 @@ public class WalletServiceImpl implements WalletService {
         response.setToWalletBalanceBefore(toBalanceBefore);
         response.setToWalletBalanceAfter(toWallet.getBalance());
         response.setIncomeTransactionId(savedIncome.getTransactionId());
+
+        // ===== THÔNG TIN BỔ SUNG (theo yêu cầu) =====
+        // 1. Đặt ví mặc định để xem chi tiết là VÍ NGUỒN (fromWallet)
+        response.setDefaultViewWalletId(fromWallet.getWalletId());
+        
+        // 2. Thông tin về ví nhóm
+        response.setFromWalletIsShared(fromWalletIsShared);
+        response.setFromWalletMemberCount((int) fromWalletMemberCount);
+        response.setToWalletIsShared(toWalletIsShared);
+        response.setToWalletMemberCount((int) toWalletMemberCount);
 
         return response;
     }

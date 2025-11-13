@@ -25,8 +25,9 @@ public class TransactionServiceImpl implements TransactionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
 
-        // 2. Kiểm tra wallet tồn tại
-        Wallet wallet = walletRepository.findById(req.getWalletId())
+        // 2. ✅ Kiểm tra wallet tồn tại với PESSIMISTIC LOCK
+        // Tránh race condition khi nhiều transactions đồng thời
+        Wallet wallet = walletRepository.findByIdWithLock(req.getWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví không tồn tại"));
 
         // 3. Kiểm tra quyền truy cập (hỗ trợ shared wallet)
