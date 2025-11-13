@@ -50,7 +50,7 @@ public class DataSeeder implements CommandLineRunner {
         if (transactionTypeRepository.count() == 0) {
             System.out.println(">>> [DataSeeder] Bảng 'transaction_types' trống. Bắt đầu thêm dữ liệu mẫu...");
 
-            // 1. Tạo loại giao dịch
+            // 1. Tạo loại giao dịch (vẫn giữ vì cần)
             TransactionType expense = new TransactionType();
             expense.setTypeName("Chi tiêu");
             transactionTypeRepository.save(expense);
@@ -59,35 +59,10 @@ public class DataSeeder implements CommandLineRunner {
             income.setTypeName("Thu nhập");
             transactionTypeRepository.save(income);
 
-            // 2. Tạo danh mục cho Chi tiêu
-            createCategory("Ăn uống", expense, "food");
-            createCategory("Di chuyển", expense, "transport");
-            createCategory("Mua sắm", expense, "shopping");
-            createCategory("Giải trí", expense, "entertainment");
-            createCategory("Hóa đơn", expense, "bills");
-            createCategory("Sức khỏe", expense, "health");
-            createCategory("Giáo dục", expense, "education");
-            createCategory("Khác", expense, "other");
-
-            // 3. Tạo danh mục cho Thu nhập
-            createCategory("Lương", income, "salary");
-            createCategory("Thưởng", income, "bonus");
-            createCategory("Đầu tư", income, "investment");
-            createCategory("Quà tặng", income, "gift");
-            createCategory("Khác", income, "other");
-
-            System.out.println(">>> [DataSeeder] Đã thêm TransactionType + Category mẫu thành công.");
+            // KHÔNG tạo danh mục mẫu nữa
+            System.out.println(">>> [DataSeeder] Chỉ thêm TransactionType. Danh mục do người dùng tự tạo.");
         } else {
             System.out.println(">>> [DataSeeder] Bảng 'transaction_types' đã có dữ liệu. Bỏ qua seeding.");
         }
-    }
-
-    // Hàm hỗ trợ tạo danh mục
-    private void createCategory(String name, TransactionType type, String icon) {
-        Category category = new Category();
-        category.setCategoryName(name);
-        category.setTransactionType(type);
-        category.setIcon(icon);
-        categoryRepository.save(category);
     }
 }

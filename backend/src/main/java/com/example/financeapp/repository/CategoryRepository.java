@@ -1,9 +1,13 @@
 package com.example.financeapp.repository;
 
 import com.example.financeapp.entity.Category;
+import com.example.financeapp.entity.TransactionType;
+import com.example.financeapp.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+
 import java.util.List;
 
 public interface CategoryRepository extends JpaRepository<Category, Long> {
-    List<Category> findByTransactionType_TypeId(Long typeId);
+    List<Category> findByUser(User user);
+    List<Category> findByUserAndTransactionType(User user, TransactionType type);
 }

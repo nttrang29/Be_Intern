@@ -1,7 +1,6 @@
 package com.example.financeapp.entity;
 
 import jakarta.persistence.*;
-import java.util.List;
 
 @Entity
 @Table(name = "categories")
@@ -22,16 +21,59 @@ public class Category {
     @Column(name = "icon")
     private String icon;
 
-    // Getters & Setters
-    public Long getCategoryId() { return categoryId; }
-    public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
-    public String getCategoryName() { return categoryName; }
-    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
+    // --- Constructors ---
+    public Category() {
+    }
 
-    public TransactionType getTransactionType() { return transactionType; }
-    public void setTransactionType(TransactionType transactionType) { this.transactionType = transactionType; }
+    public Category(String categoryName, TransactionType transactionType, String icon, User user) {
+        this.categoryName = categoryName;
+        this.transactionType = transactionType;
+        this.icon = icon;
+        this.user = user;
+    }
 
-    public String getIcon() { return icon; }
-    public void setIcon(String icon) { this.icon = icon; }
+    // --- Getters & Setters ---
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
+    }
+
+    public String getCategoryName() {
+        return categoryName;
+    }
+
+    public void setCategoryName(String categoryName) {
+        this.categoryName = categoryName;
+    }
+
+    public TransactionType getTransactionType() {
+        return transactionType;
+    }
+
+    public void setTransactionType(TransactionType transactionType) {
+        this.transactionType = transactionType;
+    }
+
+    public String getIcon() {
+        return icon;
+    }
+
+    public void setIcon(String icon) {
+        this.icon = icon;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
 }
