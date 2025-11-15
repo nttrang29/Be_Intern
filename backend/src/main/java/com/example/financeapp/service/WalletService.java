@@ -10,6 +10,8 @@ import java.util.Map;
 public interface WalletService {
 
     Wallet createWallet(Long userId, CreateWalletRequest request);
+    Wallet updateWallet(Long walletId, Long userId, Map<String, Object> updates);
+    Wallet updateWallet(Long walletId, Long userId, UpdateWalletRequest request);
 
     Wallet updateWallet(Long walletId, Long userId, Map<String, Object> updates);
 
