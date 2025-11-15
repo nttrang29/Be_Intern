@@ -34,7 +34,7 @@ public class User {
     @Column(name = "code_generated_at")
     private LocalDateTime codeGeneratedAt; // Thời gian tạo mã
 
-    @Column(name = "avatar", columnDefinition = "TEXT")
+    @Column(name = "avatar", columnDefinition = "MEDIUMTEXT")
     private String avatar; // URL hoặc base64 của avatar
 
     @Column(name = "has_default_password")

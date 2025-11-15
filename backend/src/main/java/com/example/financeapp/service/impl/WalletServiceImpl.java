@@ -77,6 +77,11 @@ public class WalletServiceImpl implements WalletService {
     }
 
     @Override
+    public Wallet updateWallet(Long walletId, Long userId, Map<String, Object> updates) {
+        return null;
+    }
+
+    @Override
     @Transactional
     public void setDefaultWallet(Long userId, Long walletId) {
         walletRepository.findByWalletIdAndUser_UserId(walletId, userId)

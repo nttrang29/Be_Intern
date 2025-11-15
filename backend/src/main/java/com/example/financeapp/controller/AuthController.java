@@ -262,6 +262,41 @@ public class AuthController {
         return ResponseEntity.ok(res);
     }
 
+    // Thêm hàm này vào AuthController.java
+    @PostMapping("/verify-otp")
+    public Map<String, Object> verifyOtp(@RequestBody Map<String, String> req) {
+        Map<String, Object> res = new HashMap<>();
+        String email = req.get("email");
+        String otp = req.get("Mã xác thực");
+
+        if (email == null || otp == null) {
+            res.put("error", "Thiếu email hoặc mã OTP");
+            return res;
+        }
+
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            res.put("error", "Tài khoản không tồn tại");
+            return res;
+        }
+
+        // Kiểm tra mã
+        if (!otp.equals(user.getVerificationCode())) {
+            res.put("error", "Mã xác thực sai");
+            return res;
+        }
+
+        // Kiểm tra thời hạn
+        if (Duration.between(user.getCodeGeneratedAt(), LocalDateTime.now()).toMinutes() > 10) {
+            res.put("error", "Mã xác thực hết hạn");
+            return res;
+        }
+
+        // Nếu mọi thứ OK
+        res.put("message", "Xác thực mã thành công");
+        return res;
+    }
+
     @PostMapping("/reset-password")
     public Map<String, Object> resetPassword(@RequestBody Map<String, String> req) {
         Map<String, Object> res = new HashMap<>();

@@ -22,26 +22,21 @@ public class WebSecurityConfig {
     }
 
     @Bean
-    @Order(1) // chạy sau oauthChain
+    @Order(1)
     SecurityFilterChain apiChain(HttpSecurity http) throws Exception {
         http
+                // ❗️ Chỉ định chain này CHỈ xử lý API
+                .securityMatcher(
+                        "/auth/**",
+                        "/profile/**",
+                        "/wallets/**"
+                )
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-
-                        // ✅ CORS preflight
+                        // (CORS preflight)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // ✅ Static / public (nếu dùng)
-                        .requestMatchers(
-                                "/", "/index.html", "/assets/**", "/static/**", "/css/**", "/js/**", "/images/**"
-                        ).permitAll()
-
-                        // ✅ Swagger / OpenAPI (nếu dùng springdoc)
-                        .requestMatchers(
-                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
-                        ).permitAll()
 
                         // ✅ Public Auth APIs
                         .requestMatchers(
@@ -49,35 +44,20 @@ public class WebSecurityConfig {
                                 "/auth/register",
                                 "/auth/verify/**",
                                 "/auth/forgot-password",
-                                "/auth/reset-password"
+                                "/auth/reset-password",
+                                "/auth/verify-otp"
                         ).permitAll()
 
-                        // ✅ Profile APIs (yêu cầu đăng nhập)
+                        // ✅ API cần đăng nhập
                         .requestMatchers(
-
-                                "/profile",
-                                "/profile/update",
-                                "/profile/change-password",
-                                "/profile/has-password",
-                                "/profile/default-password",
+                                "/profile/**",
                                 "/wallets/**"
                         ).authenticated()
 
-                        // ✅ Wallet APIs (yêu cầu đăng nhập) - bao gồm shared wallet
-                        .requestMatchers(
-                                "/wallets/**"
-                        ).authenticated()
 
-                        // (Tuỳ chọn) Cho phép GET "/" nếu bạn muốn test nhanh
-                        .requestMatchers(HttpMethod.GET, "/").permitAll()
-
-                        // ✅ còn lại phải có JWT
                         .anyRequest().authenticated()
                 )
-
-                // ✅ JWT filter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
 
         return http.build();
     }
