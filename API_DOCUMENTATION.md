@@ -361,6 +361,10 @@ Redirect đến Google login, sau đó redirect về:
 
 **Lưu ý:**
 - Chỉ có thể sửa balance nếu ví chưa có giao dịch
+- **Ví mặc định (`setAsDefault`):**
+  - `true`: Đặt ví này làm ví mặc định (tự động bỏ ví mặc định cũ)
+  - `false`: Bỏ ví mặc định (nếu ví này đang là ví mặc định)
+  - `null` hoặc không gửi: Không thay đổi trạng thái ví mặc định
 - Có thể chuyển đổi loại ví: `PERSONAL` → `GROUP`
 - **Không thể** chuyển từ `GROUP` → `PERSONAL` (sẽ báo lỗi)
 - Khi chuyển `PERSONAL` → `GROUP`, hệ thống tự động đảm bảo owner được thêm vào WalletMember (nếu chưa có)
@@ -413,12 +417,39 @@ Redirect đến Google login, sau đó redirect về:
     "deletedWalletId": 1,
     "deletedWalletName": "Ví cũ",
     "balance": 0.0,
-    "currencyCode": "VND"
+    "currencyCode": "VND",
+    "wasDefault": false,
+    "membersRemoved": 0,
+    "transactionsDeleted": 0
   }
 }
 ```
 
-**Lưu ý:** Không thể xóa ví có giao dịch hoặc ví mặc định
+**Lưu ý:** 
+- Không thể xóa ví có giao dịch hoặc ví mặc định
+- Response bao gồm:
+  - `wasDefault`: Ví có phải là ví mặc định không (luôn là `false` vì không thể xóa ví mặc định)
+  - `membersRemoved`: Số thành viên đã bị xóa khỏi ví
+  - `transactionsDeleted`: Số giao dịch đã bị xóa (luôn là `0` vì không thể xóa ví có giao dịch)
+
+**Error Response:**
+```json
+{
+  "error": "Không thể xóa ví. Bạn phải xóa các giao dịch trong ví này trước."
+}
+```
+hoặc
+```json
+{
+  "error": "Không thể xóa ví mặc định."
+}
+```
+hoặc
+```json
+{
+  "error": "Lỗi máy chủ nội bộ: ..."
+}
+```
 
 ---
 

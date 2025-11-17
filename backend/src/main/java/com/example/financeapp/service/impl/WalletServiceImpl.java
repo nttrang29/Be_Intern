@@ -63,11 +63,7 @@ public class WalletServiceImpl implements WalletService {
         } else {
             wallet.setWalletType("PERSONAL"); // Mặc định là cá nhân
         }
-        if (Boolean.TRUE.equals(request.getSetAsDefault())) {
-            walletRepository.unsetDefaultWallet(userId, null);
-            wallet.setDefault(true);
-        }
-
+        
         if (Boolean.TRUE.equals(request.getSetAsDefault())) {
             walletRepository.unsetDefaultWallet(userId, null);
             wallet.setDefault(true);
@@ -125,6 +121,7 @@ public class WalletServiceImpl implements WalletService {
             SharedWalletDTO dto = new SharedWalletDTO();
             dto.setWalletId(wallet.getWalletId());
             dto.setWalletName(wallet.getWalletName());
+            dto.setWalletType(wallet.getWalletType());
             dto.setCurrencyCode(wallet.getCurrencyCode());
             dto.setBalance(wallet.getBalance());
             dto.setDescription(wallet.getDescription());

@@ -209,13 +209,13 @@ export const walletAPI = {
 
   /**
    * Cập nhật ví
-   * Có thể cập nhật: tên, mô tả, số dư (nếu chưa có giao dịch), loại ví (PERSONAL/GROUP)
+   * Có thể cập nhật: tên, mô tả, số dư (nếu chưa có giao dịch), loại ví (PERSONAL/GROUP), trạng thái ví mặc định
    * @param {number} walletId - ID của ví
    * @param {string} walletName - Tên ví mới
    * @param {string} description - Mô tả ví
    * @param {string} currencyCode - Mã tiền tệ (chỉ để kiểm tra, không thể sửa)
    * @param {number} balance - Số dư (chỉ có thể sửa nếu ví chưa có giao dịch)
-   * @param {boolean} setAsDefault - Đặt làm ví mặc định
+   * @param {boolean|null} setAsDefault - Đặt làm ví mặc định: true = đặt làm mặc định, false = bỏ ví mặc định, null = không thay đổi
    * @param {string} walletType - Loại ví: "PERSONAL" hoặc "GROUP" (có thể chuyển PERSONAL -> GROUP, không thể GROUP -> PERSONAL)
    * @returns {Promise<{message: string, wallet: object}>}
    */
@@ -265,6 +265,10 @@ export const walletAPI = {
 
   /**
    * Xóa ví
+   * ⚠️ LƯU Ý: Không thể xóa ví có giao dịch hoặc ví mặc định
+   * @param {number} walletId - ID của ví cần xóa
+   * @returns {Promise<{message: string, deletedWallet: {deletedWalletId: number, deletedWalletName: string, balance: number, currencyCode: string, wasDefault: boolean, membersRemoved: number, transactionsDeleted: number}}>}
+   * @throws {Error} Nếu ví có giao dịch hoặc là ví mặc định
    */
   deleteWallet: async (walletId) => {
     return apiCall(`/wallets/${walletId}`, {
@@ -274,10 +278,28 @@ export const walletAPI = {
 
   /**
    * Đặt ví mặc định
+   * Tự động bỏ ví mặc định cũ và đặt ví này làm ví mặc định
+   * @param {number} walletId - ID của ví cần đặt làm mặc định
+   * @returns {Promise<{message: string}>}
    */
   setDefaultWallet: async (walletId) => {
     return apiCall(`/wallets/${walletId}/set-default`, {
       method: 'PATCH',
+    });
+  },
+
+  /**
+   * Bỏ ví mặc định
+   * Sử dụng updateWallet với setAsDefault = false để bỏ ví mặc định
+   * @param {number} walletId - ID của ví cần bỏ mặc định
+   * @returns {Promise<{message: string, wallet: object}>}
+   */
+  unsetDefaultWallet: async (walletId) => {
+    return apiCall(`/wallets/${walletId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        setAsDefault: false,
+      }),
     });
   },
 
@@ -534,9 +556,15 @@ export default {
  *   'Mô tả', // description
  *   'VND', // currencyCode
  *   null, // balance
- *   false, // setAsDefault
+ *   false, // setAsDefault (false = bỏ ví mặc định, true = đặt làm mặc định, null = không thay đổi)
  *   'GROUP' // walletType
  * );
+ * 
+ * // Bỏ ví mặc định
+ * await api.wallet.unsetDefaultWallet(1); // walletId
+ * 
+ * // Hoặc sử dụng updateWallet với setAsDefault = false
+ * await api.wallet.updateWallet(1, null, null, null, null, false, null);
  * 
  * // ============ MERGE WALLET ============
  * // 1. Lấy danh sách ví có thể gộp
