@@ -1,5 +1,6 @@
 package com.example.financeapp.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,6 +37,7 @@ public class Wallet {
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @Column(name = "is_default")
+    @JsonProperty("isDefault")
     private boolean isDefault = false;
 
     // NEW: Phân loại ví (Cá nhân / Nhóm)

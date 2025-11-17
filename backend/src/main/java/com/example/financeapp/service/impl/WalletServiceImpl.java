@@ -251,6 +251,9 @@ public class WalletServiceImpl implements WalletService {
         if (Boolean.TRUE.equals(request.getSetAsDefault())) {
             walletRepository.unsetDefaultWallet(userId, walletId);
             wallet.setDefault(true);
+        } else if (Boolean.FALSE.equals(request.getSetAsDefault())) {
+            // Nếu setAsDefault = false, bỏ ví mặc định
+            wallet.setDefault(false);
         }
 
         return walletRepository.save(wallet);

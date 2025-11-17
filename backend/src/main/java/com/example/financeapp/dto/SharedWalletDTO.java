@@ -1,5 +1,6 @@
 package com.example.financeapp.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -17,6 +18,7 @@ public class SharedWalletDTO {
     private Long ownerId;
     private String ownerName;
     private int totalMembers;
+    @JsonProperty("isDefault")
     private boolean isDefault; // ✨ NEW: Ví có phải là ví mặc định không
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
