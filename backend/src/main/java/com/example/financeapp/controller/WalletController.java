@@ -393,4 +393,19 @@ public class WalletController {
         }
     }
 
+    @GetMapping("/transfers")
+    public ResponseEntity<Map<String, Object>> getAllTransfers() {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+            List<com.example.financeapp.entity.WalletTransfer> transfers = walletService.getAllTransfers(userId);
+            res.put("transfers", transfers);
+            res.put("total", transfers.size());
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
 }

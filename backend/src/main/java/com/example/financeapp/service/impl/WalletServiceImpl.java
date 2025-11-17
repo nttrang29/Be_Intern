@@ -63,7 +63,7 @@ public class WalletServiceImpl implements WalletService {
         } else {
             wallet.setWalletType("PERSONAL"); // Mặc định là cá nhân
         }
-        
+
         if (Boolean.TRUE.equals(request.getSetAsDefault())) {
             walletRepository.unsetDefaultWallet(userId, null);
             wallet.setDefault(true);
@@ -255,23 +255,23 @@ public class WalletServiceImpl implements WalletService {
         // Cập nhật loại ví (PERSONAL <-> GROUP)
         if (request.getWalletType() != null && !request.getWalletType().isBlank()) {
             String newWalletType = request.getWalletType().toUpperCase();
-            
+
             // Validate wallet type
             if (!"PERSONAL".equals(newWalletType) && !"GROUP".equals(newWalletType)) {
                 throw new RuntimeException("Loại ví không hợp lệ. Chỉ chấp nhận PERSONAL hoặc GROUP");
             }
-            
+
             String currentWalletType = wallet.getWalletType();
-            
+
             // Cho phép chuyển PERSONAL -> GROUP
             if ("PERSONAL".equals(currentWalletType) && "GROUP".equals(newWalletType)) {
                 wallet.setWalletType("GROUP");
-                
+
                 // Đảm bảo owner được thêm vào WalletMember nếu chưa có
                 boolean ownerExists = walletMemberRepository.existsByWallet_WalletIdAndUser_UserId(
-                    walletId, userId
+                        walletId, userId
                 );
-                
+
                 if (!ownerExists) {
                     User owner = userRepository.findById(userId)
                             .orElseThrow(() -> new RuntimeException("User không tồn tại"));
@@ -331,9 +331,9 @@ public class WalletServiceImpl implements WalletService {
 
         // Lấy tất cả ví của user (không bao gồm source wallet)
         List<SharedWalletDTO> allWallets = getAllAccessibleWallets(userId);
-        
+
         List<MergeCandidateDTO> candidates = new ArrayList<>();
-        
+
         for (SharedWalletDTO wallet : allWallets) {
             if (wallet.getWalletId().equals(sourceWalletId)) {
                 continue; // Bỏ qua chính ví nguồn
@@ -350,7 +350,7 @@ public class WalletServiceImpl implements WalletService {
             candidate.setCurrencyCode(wallet.getCurrencyCode());
             candidate.setBalance(wallet.getBalance());
             candidate.setDefault(wallet.isDefault());
-            
+
             // Đếm số transactions
             long transactionCount = transactionRepository.countByWallet_WalletId(wallet.getWalletId());
             candidate.setTransactionCount((int) transactionCount);
@@ -360,7 +360,7 @@ public class WalletServiceImpl implements WalletService {
             // - User là owner của cả 2 ví
             candidate.setCanMerge(true);
             candidate.setReason(null);
-            
+
             candidates.add(candidate);
         }
 
@@ -383,7 +383,7 @@ public class WalletServiceImpl implements WalletService {
 
         Wallet sourceWallet = walletRepository.findById(sourceWalletId)
                 .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
-        
+
         Wallet targetWallet = walletRepository.findById(targetWalletId)
                 .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
 
@@ -400,18 +400,18 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal sourceBalanceConverted = sourceWallet.getBalance();
         if (!sourceWallet.getCurrencyCode().equals(targetCurrency)) {
             sourceBalanceConverted = exchangeRateService.convertAmount(
-                sourceWallet.getBalance(),
-                sourceWallet.getCurrencyCode(),
-                targetCurrency
+                    sourceWallet.getBalance(),
+                    sourceWallet.getCurrencyCode(),
+                    targetCurrency
             );
         }
 
         BigDecimal targetBalanceConverted = targetWallet.getBalance();
         if (!targetWallet.getCurrencyCode().equals(targetCurrency)) {
             targetBalanceConverted = exchangeRateService.convertAmount(
-                targetWallet.getBalance(),
-                targetWallet.getCurrencyCode(),
-                targetCurrency
+                    targetWallet.getBalance(),
+                    targetWallet.getCurrencyCode(),
+                    targetCurrency
             );
         }
 
@@ -441,12 +441,12 @@ public class WalletServiceImpl implements WalletService {
         // Validation
         preview.setCanProceed(true);
         List<String> warnings = new ArrayList<>();
-        
-        if (!sourceWallet.getCurrencyCode().equals(targetCurrency) || 
-            !targetWallet.getCurrencyCode().equals(targetCurrency)) {
+
+        if (!sourceWallet.getCurrencyCode().equals(targetCurrency) ||
+                !targetWallet.getCurrencyCode().equals(targetCurrency)) {
             warnings.add("Số dư sẽ được chuyển đổi sang " + targetCurrency);
         }
-        
+
         if (sourceWallet.isDefault()) {
             warnings.add("Ví mặc định sẽ được chuyển sang ví đích");
         }
@@ -475,7 +475,7 @@ public class WalletServiceImpl implements WalletService {
 
         Wallet sourceWallet = walletRepository.findByIdWithLock(sourceWalletId)
                 .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
-        
+
         Wallet targetWallet = walletRepository.findByIdWithLock(targetWalletId)
                 .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
 
@@ -489,7 +489,7 @@ public class WalletServiceImpl implements WalletService {
         String sourceCurrency = sourceWallet.getCurrencyCode();
         BigDecimal sourceBalance = sourceWallet.getBalance();
         int sourceTransactionCount = (int) transactionRepository.countByWallet_WalletId(sourceWalletId);
-        
+
         BigDecimal targetBalanceBefore = targetWallet.getBalance();
         int targetTransactionCountBefore = (int) transactionRepository.countByWallet_WalletId(targetWalletId);
         boolean wasSourceDefault = sourceWallet.isDefault();
@@ -498,9 +498,9 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal sourceBalanceConverted = sourceBalance;
         if (!sourceCurrency.equals(targetCurrency)) {
             sourceBalanceConverted = exchangeRateService.convertAmount(
-                sourceBalance,
-                sourceCurrency,
-                targetCurrency
+                    sourceBalance,
+                    sourceCurrency,
+                    targetCurrency
             );
         }
 
@@ -508,16 +508,16 @@ public class WalletServiceImpl implements WalletService {
         BigDecimal targetBalanceConverted = targetBalanceBefore;
         if (!targetWallet.getCurrencyCode().equals(targetCurrency)) {
             targetBalanceConverted = exchangeRateService.convertAmount(
-                targetBalanceBefore,
-                targetWallet.getCurrencyCode(),
-                targetCurrency
+                    targetBalanceBefore,
+                    targetWallet.getCurrencyCode(),
+                    targetCurrency
             );
         }
 
         // Cập nhật target wallet
         targetWallet.setCurrencyCode(targetCurrency);
         targetWallet.setBalance(sourceBalanceConverted.add(targetBalanceConverted));
-        
+
         // Nếu source wallet là default, chuyển sang target wallet
         if (wasSourceDefault) {
             walletRepository.unsetDefaultWallet(userId, targetWalletId);
@@ -529,32 +529,32 @@ public class WalletServiceImpl implements WalletService {
         // Chuyển tất cả transactions từ source sang target
         List<Transaction> sourceTransactions = transactionRepository.findByWallet_WalletId(sourceWalletId);
         LocalDateTime mergeDate = LocalDateTime.now();
-        
+
         // Lưu currency gốc của source wallet trước khi thay đổi
         String originalSourceCurrency = sourceWallet.getCurrencyCode();
-        
+
         for (Transaction tx : sourceTransactions) {
             // Nếu transaction có currency khác với target currency, lưu thông tin gốc
             if (!originalSourceCurrency.equals(targetCurrency)) {
                 tx.setOriginalAmount(tx.getAmount());
                 tx.setOriginalCurrency(originalSourceCurrency);
-                
+
                 // Chuyển đổi amount sang target currency
                 BigDecimal convertedAmount = exchangeRateService.convertAmount(
-                    tx.getAmount(),
-                    originalSourceCurrency,
-                    targetCurrency
+                        tx.getAmount(),
+                        originalSourceCurrency,
+                        targetCurrency
                 );
                 tx.setAmount(convertedAmount);
-                
+
                 // Lưu exchange rate
                 BigDecimal rate = exchangeRateService.getExchangeRate(
-                    originalSourceCurrency,
-                    targetCurrency
+                        originalSourceCurrency,
+                        targetCurrency
                 );
                 tx.setExchangeRate(rate);
             }
-            
+
             tx.setWallet(targetWallet);
             tx.setMergeDate(mergeDate);
             transactionRepository.save(tx);
@@ -565,15 +565,15 @@ public class WalletServiceImpl implements WalletService {
         for (WalletMember member : sourceMembers) {
             // Kiểm tra xem member đã có trong target wallet chưa
             boolean existsInTarget = walletMemberRepository.existsByWallet_WalletIdAndUser_UserId(
-                targetWalletId,
-                member.getUser().getUserId()
+                    targetWalletId,
+                    member.getUser().getUserId()
             );
-            
+
             if (!existsInTarget) {
                 WalletMember newMember = new WalletMember(
-                    targetWallet,
-                    member.getUser(),
-                    WalletRole.MEMBER // Luôn là MEMBER vì target wallet đã có owner
+                        targetWallet,
+                        member.getUser(),
+                        WalletRole.MEMBER // Luôn là MEMBER vì target wallet đã có owner
                 );
                 walletMemberRepository.save(newMember);
             }
@@ -584,8 +584,8 @@ public class WalletServiceImpl implements WalletService {
 
         // Xóa source wallet transfers
         walletTransferRepository.deleteByFromWallet_WalletIdOrToWallet_WalletId(
-            sourceWalletId,
-            sourceWalletId
+                sourceWalletId,
+                sourceWalletId
         );
 
         // Xóa source wallet
@@ -599,7 +599,7 @@ public class WalletServiceImpl implements WalletService {
         history.setSourceCurrency(sourceCurrency);
         history.setSourceBalance(sourceBalance);
         history.setSourceTransactionCount(sourceTransactionCount);
-        
+
         history.setTargetWalletId(targetWalletId);
         history.setTargetWalletName(targetWallet.getWalletName());
         history.setTargetCurrency(targetCurrency);
@@ -608,7 +608,7 @@ public class WalletServiceImpl implements WalletService {
         history.setTargetTransactionCountBefore(targetTransactionCountBefore);
         history.setMergedAt(mergeDate);
         history.setMergeDurationMs(System.currentTimeMillis() - startTime);
-        
+
         WalletMergeHistory savedHistory = walletMergeHistoryRepository.save(history);
 
         // Tạo response
@@ -649,7 +649,7 @@ public class WalletServiceImpl implements WalletService {
 
         // 4. Lưu thông tin ví mặc định trước khi xóa
         boolean wasDefault = wallet.isDefault();
-        
+
         // Kiểm tra nếu là ví mặc định
         if (wasDefault) {
             throw new RuntimeException("Không thể xóa ví mặc định.");
@@ -673,7 +673,7 @@ public class WalletServiceImpl implements WalletService {
         response.setWasDefault(wasDefault);
         response.setMembersRemoved(membersRemoved);
         response.setTransactionsDeleted(0); // Không có transactions vì đã check ở trên
-        
+
         return response;
     }
 
@@ -770,6 +770,12 @@ public class WalletServiceImpl implements WalletService {
         response.setToWalletMemberCount((int) targetMembers);
 
         return response;
+    }
+
+    // ---------------- GET ALL TRANSFERS ----------------
+    @Override
+    public List<WalletTransfer> getAllTransfers(Long userId) {
+        return walletTransferRepository.findByUser_UserIdOrderByTransferDateDesc(userId);
     }
 
     // ---------------- HELPER ----------------

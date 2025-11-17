@@ -45,4 +45,6 @@ public interface WalletService {
     DeleteWalletResponse deleteWallet(Long userId, Long walletId);
     @Transactional
     TransferMoneyResponse transferMoney(Long userId, TransferMoneyRequest request);
+
+    List<com.example.financeapp.entity.WalletTransfer> getAllTransfers(Long userId);
 }

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
@@ -33,10 +34,10 @@ public class TransactionServiceImpl implements TransactionService {
         // 3. Kiểm tra quyền truy cập (hỗ trợ shared wallet)
         // User phải là OWNER hoặc MEMBER của ví mới được tạo transaction
         boolean hasAccess = walletMemberRepository.existsByWallet_WalletIdAndUser_UserId(
-                req.getWalletId(), 
+                req.getWalletId(),
                 userId
         );
-        
+
         if (!hasAccess) {
             throw new RuntimeException("Bạn không có quyền truy cập ví này");
         }
@@ -63,10 +64,10 @@ public class TransactionServiceImpl implements TransactionService {
             BigDecimal newBalance = wallet.getBalance().subtract(req.getAmount());
             if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
                 throw new RuntimeException(
-                    "Số dư không đủ. Số dư hiện tại: " + wallet.getBalance() + 
-                    " " + wallet.getCurrencyCode() + 
-                    ", Số tiền chi tiêu: " + req.getAmount() + 
-                    " " + wallet.getCurrencyCode()
+                        "Số dư không đủ. Số dư hiện tại: " + wallet.getBalance() +
+                                " " + wallet.getCurrencyCode() +
+                                ", Số tiền chi tiêu: " + req.getAmount() +
+                                " " + wallet.getCurrencyCode()
                 );
             }
             wallet.setBalance(newBalance);
@@ -102,5 +103,10 @@ public class TransactionServiceImpl implements TransactionService {
     @Transactional
     public Transaction createIncome(Long userId, CreateTransactionRequest request) {
         return createTransaction(userId, request, "Thu nhập");
+    }
+
+    @Override
+    public List<Transaction> getAllTransactions(Long userId) {
+        return transactionRepository.findByUser_UserIdOrderByTransactionDateDesc(userId);
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -54,6 +55,21 @@ public class TransactionController {
         } catch (Exception e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getAllTransactions() {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+            List<Transaction> transactions = transactionService.getAllTransactions(userId);
+            res.put("transactions", transactions);
+            res.put("total", transactions.size());
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(res);
         }
     }
 }
