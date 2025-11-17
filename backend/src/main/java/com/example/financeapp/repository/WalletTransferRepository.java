@@ -14,15 +14,22 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
 
     /**
      * Lấy tất cả transfers của user (theo thời gian giảm dần)
+     * Sử dụng JOIN FETCH để load các relationships và tránh lazy loading exception
      */
-    List<WalletTransfer> findByUser_UserIdOrderByTransferDateDesc(Long userId);
+    @Query("SELECT t FROM WalletTransfer t " +
+            "LEFT JOIN FETCH t.fromWallet " +
+            "LEFT JOIN FETCH t.toWallet " +
+            "LEFT JOIN FETCH t.user " +
+            "WHERE t.user.userId = :userId " +
+            "ORDER BY t.transferDate DESC")
+    List<WalletTransfer> findByUser_UserIdOrderByTransferDateDesc(@Param("userId") Long userId);
 
     /**
      * Lấy transfers của một ví cụ thể (cả gửi và nhận)
      */
     @Query("SELECT t FROM WalletTransfer t " +
-           "WHERE t.fromWallet.walletId = :walletId OR t.toWallet.walletId = :walletId " +
-           "ORDER BY t.transferDate DESC")
+            "WHERE t.fromWallet.walletId = :walletId OR t.toWallet.walletId = :walletId " +
+            "ORDER BY t.transferDate DESC")
     List<WalletTransfer> findByWalletId(@Param("walletId") Long walletId);
 
     /**
@@ -39,24 +46,24 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
      * Lấy transfers trong khoảng thời gian
      */
     @Query("SELECT t FROM WalletTransfer t " +
-           "WHERE t.user.userId = :userId " +
-           "AND t.transferDate BETWEEN :startDate AND :endDate " +
-           "ORDER BY t.transferDate DESC")
+            "WHERE t.user.userId = :userId " +
+            "AND t.transferDate BETWEEN :startDate AND :endDate " +
+            "ORDER BY t.transferDate DESC")
     List<WalletTransfer> findByUserAndDateRange(
-        @Param("userId") Long userId,
-        @Param("startDate") LocalDateTime startDate,
-        @Param("endDate") LocalDateTime endDate
+            @Param("userId") Long userId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
     );
 
     /**
      * Đếm số lần transfer giữa 2 ví
      */
     @Query("SELECT COUNT(t) FROM WalletTransfer t " +
-           "WHERE (t.fromWallet.walletId = :wallet1Id AND t.toWallet.walletId = :wallet2Id) " +
-           "OR (t.fromWallet.walletId = :wallet2Id AND t.toWallet.walletId = :wallet1Id)")
+            "WHERE (t.fromWallet.walletId = :wallet1Id AND t.toWallet.walletId = :wallet2Id) " +
+            "OR (t.fromWallet.walletId = :wallet2Id AND t.toWallet.walletId = :wallet1Id)")
     long countTransfersBetweenWallets(
-        @Param("wallet1Id") Long wallet1Id,
-        @Param("wallet2Id") Long wallet2Id
+            @Param("wallet1Id") Long wallet1Id,
+            @Param("wallet2Id") Long wallet2Id
     );
 
     /**

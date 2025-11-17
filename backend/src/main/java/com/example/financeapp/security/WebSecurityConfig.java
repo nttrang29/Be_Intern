@@ -29,7 +29,9 @@ public class WebSecurityConfig {
                 .securityMatcher(
                         "/auth/**",
                         "/profile/**",
-                        "/wallets/**"
+                        "/wallets/**",
+                        "/transactions/**",
+                        "/categories/**"
                 )
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
@@ -51,7 +53,9 @@ public class WebSecurityConfig {
                         // ✅ API cần đăng nhập
                         .requestMatchers(
                                 "/profile/**",
-                                "/wallets/**"
+                                "/wallets/**",
+                                "/transactions/**",
+                                "/categories/**"
                         ).authenticated()
 
 
