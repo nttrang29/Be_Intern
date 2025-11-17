@@ -298,12 +298,46 @@ public class WalletServiceImpl implements WalletService {
     }
 
     @Override
+    @Transactional // Đảm bảo có @Transactional
     public DeleteWalletResponse deleteWallet(Long userId, Long walletId) {
-        return null;
+
+        // 1. Tìm ví
+        Wallet wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ví"));
+
+        // 2. Kiểm tra quyền sở hữu
+        if (!isOwner(walletId, userId)) {
+            throw new RuntimeException("Bạn không có quyền xóa ví này");
+        }
+
+        // 3. Kiểm tra nếu có giao dịch
+        boolean hasTransactions = transactionRepository.existsByWallet_WalletId(walletId);
+        if (hasTransactions) {
+            throw new RuntimeException("Không thể xóa ví. Bạn phải xóa các giao dịch trong ví này trước.");
+        }
+
+        // 4. Kiểm tra nếu là ví mặc định
+        if (wallet.isDefault()) {
+            throw new RuntimeException("Không thể xóa ví mặc định.");
+        }
+
+        // 5. Xóa các thành viên liên quan
+        List<WalletMember> members = walletMemberRepository.findByWallet_WalletId(walletId);
+        walletMemberRepository.deleteAll(members);
+
+        // 6. Xóa ví
+        walletRepository.delete(wallet);
+
+        // 7. Trả về thông tin
+        // (Bạn cần tạo class DeleteWalletResponse nếu chưa có)
+        return new DeleteWalletResponse(
+                wallet.getWalletId(),
+                wallet.getWalletName(),
+                wallet.getBalance(),
+                wallet.getCurrencyCode()
+        );
     }
 
-    // ---------------- MERGING WALLETS ----------------
-    // Giữ nguyên block merge wallets của bạn (không thay đổi)
 
     // ---------------- TRANSFER MONEY ----------------
     @Override
