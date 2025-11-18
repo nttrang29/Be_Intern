@@ -669,25 +669,47 @@ public class WalletServiceImpl implements WalletService {
         String originalSourceCurrency = sourceWallet.getCurrencyCode();
 
         for (Transaction tx : sourceTransactions) {
-            // Nếu transaction có currency khác với target currency, lưu thông tin gốc
-            if (!originalSourceCurrency.equals(targetCurrency)) {
-                tx.setOriginalAmount(tx.getAmount());
-                tx.setOriginalCurrency(originalSourceCurrency);
+            // Xác định currency gốc của transaction
+            // Nếu transaction đã có originalCurrency (từ lần chuyển đổi trước), dùng nó
+            // Nếu chưa có, dùng currency hiện tại của source wallet
+            String txOriginalCurrency = tx.getOriginalCurrency() != null
+                    ? tx.getOriginalCurrency()
+                    : originalSourceCurrency;
 
-                // Chuyển đổi amount sang target currency
+            // Xác định amount gốc của transaction
+            // Nếu transaction đã có originalAmount (từ lần chuyển đổi trước), dùng nó
+            // Nếu chưa có, dùng amount hiện tại
+            BigDecimal txOriginalAmount = tx.getOriginalAmount() != null
+                    ? tx.getOriginalAmount()
+                    : tx.getAmount();
+
+            // Lưu thông tin gốc nếu chưa có
+            if (tx.getOriginalAmount() == null) {
+                tx.setOriginalAmount(txOriginalAmount);
+                tx.setOriginalCurrency(txOriginalCurrency);
+            }
+
+            // Nếu currency gốc khác với target currency, cần chuyển đổi
+            if (!txOriginalCurrency.equals(targetCurrency)) {
+                // Chuyển đổi từ currency gốc sang target currency
                 BigDecimal convertedAmount = exchangeRateService.convertAmount(
-                        tx.getAmount(),
-                        originalSourceCurrency,
+                        txOriginalAmount,
+                        txOriginalCurrency,
                         targetCurrency
                 );
                 tx.setAmount(convertedAmount);
 
-                // Lưu exchange rate
+                // Lưu exchange rate từ currency gốc sang target currency
                 BigDecimal rate = exchangeRateService.getExchangeRate(
-                        originalSourceCurrency,
+                        txOriginalCurrency,
                         targetCurrency
                 );
                 tx.setExchangeRate(rate);
+            } else {
+                // Nếu currency gốc trùng với target currency, không cần chuyển đổi
+                // Nhưng vẫn cần đảm bảo amount = originalAmount
+                tx.setAmount(txOriginalAmount);
+                tx.setExchangeRate(BigDecimal.ONE);
             }
 
             tx.setWallet(targetWallet);
