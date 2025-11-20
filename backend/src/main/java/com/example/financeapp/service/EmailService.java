@@ -15,7 +15,7 @@ public class EmailService {
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setTo(to);
         msg.setSubject("Xác minh tài khoản đăng ký");
-        msg.setText("Mã xác minh: " + code + "\nHiệu lực 10 phút.");
+        msg.setText("Mã xác minh: " + code + "\nHiệu lực 90 giây.");
         mailSender.send(msg);
     }
 
@@ -24,7 +24,7 @@ public class EmailService {
         SimpleMailMessage msg = new SimpleMailMessage();
         msg.setTo(to);
         msg.setSubject("Khôi phục mật khẩu");
-        msg.setText("Mã xác thực: " + code + "\nHiệu lực 10 phút.\nBỏ qua nếu không yêu cầu.");
+        msg.setText("Mã xác thực: " + code + "\nHiệu lực 90 giây.\nBỏ qua nếu không yêu cầu.");
         mailSender.send(msg);
     }
 }
