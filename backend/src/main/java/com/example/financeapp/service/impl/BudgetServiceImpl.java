@@ -23,8 +23,6 @@ public class BudgetServiceImpl implements BudgetService {
     @Autowired
     private WalletService walletService;
 
-    // src/main/java/com/example/financeapp/service/impl/BudgetServiceImpl.java
-
     @Override
     @Transactional
     public Budget createBudget(Long userId, CreateBudgetRequest request) {
@@ -43,10 +41,9 @@ public class BudgetServiceImpl implements BudgetService {
             throw new RuntimeException("Chỉ được tạo ngân sách cho danh mục Chi tiêu");
         }
 
-        Wallet wallet = null;
         Long walletIdForCheck = null;
         if (request.getWalletId() != null) {
-            wallet = walletRepository.findById(request.getWalletId())
+            Wallet wallet = walletRepository.findById(request.getWalletId())
                     .orElseThrow(() -> new RuntimeException("Ví không tồn tại"));
 
             if (!walletService.hasAccess(wallet.getWalletId(), userId)) {
@@ -55,24 +52,30 @@ public class BudgetServiceImpl implements BudgetService {
             walletIdForCheck = wallet.getWalletId();
         }
 
-        boolean alreadyExists = budgetRepository.existsExactlySameBudget(
+        // KIỂM TRA GIAO NHAU (OVERLAP) – CHẶN HOÀN TOÀN
+        boolean hasOverlap = budgetRepository.existsOverlappingBudget(
                 user,
-                category,
-                wallet,
+                request.getCategoryId(),
                 walletIdForCheck,
                 request.getStartDate(),
                 request.getEndDate()
         );
 
-        if (alreadyExists) {
+        if (hasOverlap) {
+            String walletInfo = walletIdForCheck == null ? "tất cả ví" : "ví đã chọn";
             throw new RuntimeException(
-                    "Bạn đã tạo ngân sách cho danh mục \"" + category.getCategoryName() +
-                            "\" trong khoảng thời gian từ " + request.getStartDate() +
-                            " đến " + request.getEndDate() + ". Vui lòng chỉnh sửa ngân sách cũ hoặc chọn khoảng thời gian khác."
+                    "Không thể tạo ngân sách mới!\n" +
+                            "Danh mục \"" + category.getCategoryName() + "\" trong " + walletInfo +
+                            " đã có ngân sách đang áp dụng trong khoảng thời gian này.\n" +
+                            "Vui lòng chọn khoảng thời gian không giao nhau hoặc chỉnh sửa ngân sách cũ."
             );
         }
 
-        // Tạo ngân sách mới
+        // Nếu không trùng → tạo bình thường
+        Wallet wallet = walletIdForCheck != null
+                ? walletRepository.findById(walletIdForCheck).orElse(null)
+                : null;
+
         Budget budget = new Budget();
         budget.setUser(user);
         budget.setCategory(category);

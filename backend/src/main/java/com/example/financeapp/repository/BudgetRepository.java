@@ -33,4 +33,24 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
+
+    @Query("""
+    SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END
+    FROM Budget b
+    WHERE b.user = :user
+      AND b.category.categoryId = :categoryId
+      AND (
+            (b.wallet IS NULL AND :walletId IS NULL)
+         OR (b.wallet IS NOT NULL AND :walletId IS NOT NULL AND b.wallet.walletId = :walletId)
+          )
+      AND b.startDate <= :newEndDate
+      AND b.endDate >= :newStartDate
+    """)
+    boolean existsOverlappingBudget(
+            @Param("user") User user,
+            @Param("categoryId") Long categoryId,
+            @Param("walletId") Long walletId,
+            @Param("newStartDate") LocalDate newStartDate,
+            @Param("newEndDate") LocalDate newEndDate
+    );
 }
