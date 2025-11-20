@@ -1,41 +1,85 @@
 package com.example.financeapp.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
-@Table(name = "budgets")
+@Table(name = "budgets", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"user_id", "category_id", "wallet_id", "start_date", "end_date"},
+                name = "uk_budget_unique_period")
+})
 public class Budget {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "budget_id")
+    private Long budgetId;
 
-    // Hạn mức chi tiêu
-    private BigDecimal amount;
-
-    // Tên ngân sách (ví dụ "Ăn uống tháng 11", "Đi lại", v.v.)
-    private String name;
-
-    // Ngày bắt đầu – cho phép đặt kỳ tùy chọn
-    private LocalDate startDate;
-
-    // Ngày kết thúc
-    private LocalDate endDate;
-
-    // Liên kết với user
-    @ManyToOne
-    @JoinColumn(name = "user_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Budget có thể theo ví
-    @ManyToOne
-    @JoinColumn(name = "wallet_id")
-    private Wallet wallet;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
 
-    private String category; // Nếu muốn áp dụng theo danh mục (optional)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "wallet_id")
+    private Wallet wallet; // null = áp dụng cho tất cả ví
+
+    @Column(name = "amount_limit", nullable = false, precision = 15, scale = 2)
+    private BigDecimal amountLimit;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "end_date", nullable = false)
+    private LocalDate endDate;
+
+    @Column(name = "note", length = 255)
+    private String note;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    // Getters & Setters
+    public Long getBudgetId() { return budgetId; }
+    public void setBudgetId(Long budgetId) { this.budgetId = budgetId; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+
+    public Category getCategory() { return category; }
+    public void setCategory(Category category) { this.category = category; }
+
+    public Wallet getWallet() { return wallet; }
+    public void setWallet(Wallet wallet) { this.wallet = wallet; }
+
+    public BigDecimal getAmountLimit() { return amountLimit; }
+    public void setAmountLimit(BigDecimal amountLimit) { this.amountLimit = amountLimit; }
+
+    public LocalDate getStartDate() { return startDate; }
+    public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
+
+    public LocalDate getEndDate() { return endDate; }
+    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
