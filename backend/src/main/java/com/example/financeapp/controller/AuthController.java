@@ -364,5 +364,36 @@ public class AuthController {
         return ResponseEntity.ok(res);
     }
 
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Map<String, Object>> resendVerification(@RequestBody Map<String, String> req) {
+        Map<String, Object> res = new HashMap<>();
+        String email = req.get("email");
+
+        if (email == null || email.trim().isEmpty()) {
+            res.put("error", "Vui lòng cung cấp email");
+            return ResponseEntity.badRequest().body(res);
+        }
+
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            res.put("error", "Email chưa được đăng ký");
+            return ResponseEntity.badRequest().body(res);
+        }
+
+        User user = userOpt.get();
+        if (user.isEnabled()) {
+            res.put("error", "Tài khoản đã được kích hoạt. Vui lòng đăng nhập.");
+            return ResponseEntity.badRequest().body(res);
+        }
+
+        String newVerificationCode = String.format("%06d", new Random().nextInt(1_000_000));
+        user.setVerificationCode(newVerificationCode);
+        user.setCodeGeneratedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        emailService.sendRegistrationVerificationEmail(email, newVerificationCode);
+        res.put("message", "Đã gửi lại mã xác minh vào email của bạn.");
+        return ResponseEntity.ok(res);
+    }
 
 }

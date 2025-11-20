@@ -47,7 +47,8 @@ public class WebSecurityConfig {
                                 "/auth/verify/**",
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
-                                "/auth/verify-otp"
+                                "/auth/verify-otp",
+                                "/auth/resend-verification"
                         ).permitAll()
 
                         // ✅ API cần đăng nhập
