@@ -19,29 +19,39 @@ public class User {
     private String email;
 
     @Column(name = "password_hash")
-    private String passwordHash; // Có thể null cho OAuth2 users
+    private String passwordHash; // null nếu là OAuth2 user
 
     @Column(name = "provider")
-    private String provider; // "local" hoặc "google"
+    private String provider; // local / google / facebook
 
-    // --- Thêm mới cho chức năng xác thực email ---
+    // ===== Xác minh email =====
     @Column(name = "enabled")
-    private boolean enabled = false; // Mặc định: chưa kích hoạt
+    private boolean enabled = false;
 
     @Column(name = "verification_code")
-    private String verificationCode; // Mã xác nhận 6 chữ số
+    private String verificationCode;   // Mã OTP hoặc mã xác minh email
 
     @Column(name = "code_generated_at")
-    private LocalDateTime codeGeneratedAt; // Thời gian tạo mã
+    private LocalDateTime codeGeneratedAt;
 
+    // ===== Giới hạn OTP =====
+    @Column(name = "otp_request_count")
+    private int otpRequestCount = 0;   // số lần gửi OTP trong 1 giờ
+
+    @Column(name = "otp_last_request")
+    private LocalDateTime otpLastRequest;  // lần cuối gửi OTP
+
+    // ===== Avatar người dùng =====
     @Column(name = "avatar", columnDefinition = "MEDIUMTEXT")
-    private String avatar; // URL hoặc base64 của avatar
+    private String avatar;
 
+    // Dùng để đánh dấu tài khoản có đang dùng mật khẩu mặc định không
     @Column(name = "has_default_password")
-    private Boolean hasDefaultPassword = false; // true nếu đang dùng mật khẩu mặc định
+    private Boolean hasDefaultPassword = false;
 
-    // --- Getters & Setters ---
-
+    // ===========================
+    // GETTERS & SETTERS
+    // ===========================
     public Long getUserId() {
         return userId;
     }
@@ -106,6 +116,22 @@ public class User {
         this.codeGeneratedAt = codeGeneratedAt;
     }
 
+    public int getOtpRequestCount() {
+        return otpRequestCount;
+    }
+
+    public void setOtpRequestCount(int otpRequestCount) {
+        this.otpRequestCount = otpRequestCount;
+    }
+
+    public LocalDateTime getOtpLastRequest() {
+        return otpLastRequest;
+    }
+
+    public void setOtpLastRequest(LocalDateTime otpLastRequest) {
+        this.otpLastRequest = otpLastRequest;
+    }
+
     public String getAvatar() {
         return avatar;
     }
@@ -114,11 +140,11 @@ public class User {
         this.avatar = avatar;
     }
 
-    public boolean isHasDefaultPassword() {
+    public Boolean getHasDefaultPassword() {
         return hasDefaultPassword;
     }
 
-    public void setHasDefaultPassword(boolean hasDefaultPassword) {
+    public void setHasDefaultPassword(Boolean hasDefaultPassword) {
         this.hasDefaultPassword = hasDefaultPassword;
     }
 }
