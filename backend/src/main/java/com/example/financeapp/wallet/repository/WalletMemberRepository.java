@@ -33,10 +33,10 @@ public interface WalletMemberRepository extends JpaRepository<WalletMember, Long
 
     // Kiểm tra user có phải owner của wallet không
     @Query("SELECT CASE WHEN COUNT(wm) > 0 THEN true ELSE false END " +
-           "FROM WalletMember wm " +
-           "WHERE wm.wallet.walletId = :walletId " +
-           "AND wm.user.userId = :userId " +
-           "AND wm.role = 'OWNER'")
+            "FROM WalletMember wm " +
+            "WHERE wm.wallet.walletId = :walletId " +
+            "AND wm.user.userId = :userId " +
+            "AND wm.role = 'OWNER'")
     boolean isOwner(@Param("walletId") Long walletId, @Param("userId") Long userId);
 
     // Đếm số lượng members trong wallet

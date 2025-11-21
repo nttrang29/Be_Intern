@@ -11,7 +11,7 @@ public class TransferMoneyResponse {
 
     // === TRANSFER INFO ===
     private Long transferId; // ID của bản ghi chuyển tiền
-    
+
     // === GENERAL INFO ===
     private BigDecimal amount;
     private String currencyCode;

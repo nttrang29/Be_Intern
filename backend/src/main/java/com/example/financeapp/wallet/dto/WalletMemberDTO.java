@@ -18,8 +18,8 @@ public class WalletMemberDTO {
     public WalletMemberDTO() {
     }
 
-    public WalletMemberDTO(Long memberId, Long userId, String fullName, String email, 
-                          String avatar, String role, LocalDateTime joinedAt) {
+    public WalletMemberDTO(Long memberId, Long userId, String fullName, String email,
+                           String avatar, String role, LocalDateTime joinedAt) {
         this.memberId = memberId;
         this.userId = userId;
         this.fullName = fullName;

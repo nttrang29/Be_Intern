@@ -5,8 +5,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-    name = "wallet_members",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"wallet_id", "user_id"})
+        name = "wallet_members",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"wallet_id", "user_id"})
 )
 public class WalletMember {
 
