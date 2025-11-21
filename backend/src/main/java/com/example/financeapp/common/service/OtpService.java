@@ -1,4 +1,4 @@
-package com.example.financeapp.auth.service;
+package com.example.financeapp.common.service;
 
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.user.repository.UserRepository;

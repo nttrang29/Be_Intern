@@ -1,4 +1,4 @@
-package com.example.financeapp.wallet.dto;
+package com.example.financeapp.wallet.dto.response;
 
 import java.time.LocalDateTime;
 

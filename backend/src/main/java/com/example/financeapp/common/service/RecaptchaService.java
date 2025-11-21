@@ -1,4 +1,4 @@
-package com.example.financeapp.auth.service;
+package com.example.financeapp.common.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;

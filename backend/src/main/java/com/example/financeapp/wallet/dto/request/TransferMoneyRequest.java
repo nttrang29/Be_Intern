@@ -1,4 +1,4 @@
-package com.example.financeapp.wallet.dto;
+package com.example.financeapp.wallet.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;

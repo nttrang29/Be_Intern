@@ -1,7 +1,17 @@
 // tập tin: .../service/WalletService.java
 package com.example.financeapp.wallet.service;
 
-import com.example.financeapp.wallet.dto.*;
+import com.example.financeapp.wallet.dto.request.CreateWalletRequest;
+import com.example.financeapp.wallet.dto.request.TransferMoneyRequest;
+import com.example.financeapp.wallet.dto.request.UpdateTransferRequest;
+import com.example.financeapp.wallet.dto.request.UpdateWalletRequest;
+import com.example.financeapp.wallet.dto.response.DeleteWalletResponse;
+import com.example.financeapp.wallet.dto.response.MergeCandidateDTO;
+import com.example.financeapp.wallet.dto.response.MergeWalletPreviewResponse;
+import com.example.financeapp.wallet.dto.response.MergeWalletResponse;
+import com.example.financeapp.wallet.dto.response.SharedWalletDTO;
+import com.example.financeapp.wallet.dto.response.TransferMoneyResponse;
+import com.example.financeapp.wallet.dto.response.WalletMemberDTO;
 import com.example.financeapp.wallet.entity.Wallet;
 import com.example.financeapp.wallet.entity.WalletTransfer;
 import jakarta.transaction.Transactional;
