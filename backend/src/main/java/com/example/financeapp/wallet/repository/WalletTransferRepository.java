@@ -27,8 +27,12 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
 
     /**
      * Lấy transfers của một ví cụ thể (cả gửi và nhận)
+     * Sử dụng JOIN FETCH để load relationships và tránh lazy loading exception
      */
     @Query("SELECT t FROM WalletTransfer t " +
+            "LEFT JOIN FETCH t.fromWallet " +
+            "LEFT JOIN FETCH t.toWallet " +
+            "LEFT JOIN FETCH t.user " +
             "WHERE t.fromWallet.walletId = :walletId OR t.toWallet.walletId = :walletId " +
             "ORDER BY t.transferDate DESC")
     List<WalletTransfer> findByWalletId(@Param("walletId") Long walletId);

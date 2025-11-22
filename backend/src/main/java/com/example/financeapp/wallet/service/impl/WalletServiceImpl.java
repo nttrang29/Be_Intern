@@ -760,11 +760,41 @@ public class WalletServiceImpl implements WalletService {
         // Xóa source wallet members
         walletMemberRepository.deleteAll(sourceMembers);
 
-        // Xóa source wallet transfers
-        walletTransferRepository.deleteByFromWallet_WalletIdOrToWallet_WalletId(
-                sourceWalletId,
-                sourceWalletId
-        );
+        // Cập nhật source wallet transfers thay vì xóa để giữ lại lịch sử
+        // Lấy tất cả transfers liên quan đến source wallet
+        List<WalletTransfer> sourceTransfers = walletTransferRepository.findByWalletId(sourceWalletId);
+
+        for (WalletTransfer transfer : sourceTransfers) {
+            boolean fromIsSource = transfer.getFromWallet().getWalletId().equals(sourceWalletId);
+            boolean toIsSource = transfer.getToWallet().getWalletId().equals(sourceWalletId);
+
+            // Nếu cả fromWallet và toWallet đều là source wallet (không nên xảy ra), xóa transfer
+            if (fromIsSource && toIsSource) {
+                walletTransferRepository.delete(transfer);
+                continue;
+            }
+
+            // Update fromWallet nếu là source wallet
+            if (fromIsSource) {
+                transfer.setFromWallet(targetWallet);
+            }
+
+            // Update toWallet nếu là source wallet
+            if (toIsSource) {
+                transfer.setToWallet(targetWallet);
+            }
+
+            // Nếu sau khi update, cả fromWallet và toWallet đều là target wallet
+            // (tức là cả 2 ví đều được gộp vào target), xóa transfer vì không còn ý nghĩa
+            if (transfer.getFromWallet().getWalletId().equals(targetWalletId) &&
+                    transfer.getToWallet().getWalletId().equals(targetWalletId)) {
+                walletTransferRepository.delete(transfer);
+                continue;
+            }
+
+            // Lưu transfer đã được update
+            walletTransferRepository.save(transfer);
+        }
 
         // Xóa source wallet
         walletRepository.delete(sourceWallet);
