@@ -136,6 +136,7 @@ public class WalletServiceImpl implements WalletService {
                     .orElse(null);
 
             long totalMembers = walletMemberRepository.countByWallet_WalletId(wallet.getWalletId());
+            long transactionCount = transactionRepository.countByWallet_WalletId(wallet.getWalletId());
 
             SharedWalletDTO dto = new SharedWalletDTO();
             dto.setWalletId(wallet.getWalletId());
@@ -146,6 +147,7 @@ public class WalletServiceImpl implements WalletService {
             dto.setDescription(wallet.getDescription());
             dto.setMyRole(membership.getRole().toString());
             dto.setTotalMembers((int) totalMembers);
+            dto.setTransactionCount((int) transactionCount);
             dto.setDefault(wallet.isDefault());
             dto.setCreatedAt(wallet.getCreatedAt());
             dto.setUpdatedAt(wallet.getUpdatedAt());

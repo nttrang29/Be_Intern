@@ -18,6 +18,7 @@ public class SharedWalletDTO {
     private Long ownerId;
     private String ownerName;
     private int totalMembers;
+    private int transactionCount; // Số lượng giao dịch trong ví
     @JsonProperty("isDefault")
     private boolean isDefault; // ✨ NEW: Ví có phải là ví mặc định không
     private LocalDateTime createdAt;
@@ -106,6 +107,14 @@ public class SharedWalletDTO {
 
     public void setTotalMembers(int totalMembers) {
         this.totalMembers = totalMembers;
+    }
+
+    public int getTransactionCount() {
+        return transactionCount;
+    }
+
+    public void setTransactionCount(int transactionCount) {
+        this.transactionCount = transactionCount;
     }
 
     public LocalDateTime getCreatedAt() {

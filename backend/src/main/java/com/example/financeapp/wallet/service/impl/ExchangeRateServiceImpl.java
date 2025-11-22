@@ -64,12 +64,27 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
 
         // Tính tỷ giá: from → VND → to
         // VD: USD → VND: 1 USD = ? VND
-        //     1 / rateUSD = 1 / 0.000041 = 24,390.24
-        BigDecimal fromRateToVND = BigDecimal.ONE.divide(EXCHANGE_RATES.get(fromCurrency), 6, RoundingMode.HALF_UP);
-        BigDecimal toRateToVND = BigDecimal.ONE.divide(EXCHANGE_RATES.get(toCurrency), 6, RoundingMode.HALF_UP);
+        //     1 / rateUSD = 1 / 0.000041 = 24,390.243902439024...
+        // Tối ưu: Tính trực tiếp từ EXCHANGE_RATES để tránh sai số tích lũy
+        // Tỷ giá from → to = EXCHANGE_RATES[to] / EXCHANGE_RATES[from]
+        // VD: USD → EUR = 0.000038 / 0.000041 = 0.926829268292683
 
-        // Tỷ giá from → to
-        return fromRateToVND.divide(toRateToVND, 6, RoundingMode.HALF_UP);
+        // Trường hợp đặc biệt: Nếu from là VND, tỷ giá = EXCHANGE_RATES[to]
+        if (fromCurrency.equals("VND")) {
+            return EXCHANGE_RATES.get(toCurrency);
+        }
+
+        // Trường hợp đặc biệt: Nếu to là VND, tỷ giá = 1 / EXCHANGE_RATES[from]
+        if (toCurrency.equals("VND")) {
+            return BigDecimal.ONE.divide(EXCHANGE_RATES.get(fromCurrency), 12, RoundingMode.HALF_UP);
+        }
+
+        // Trường hợp chung: from → VND → to
+        // Tỷ giá = EXCHANGE_RATES[to] / EXCHANGE_RATES[from]
+        // Tính trực tiếp để tránh sai số tích lũy từ phép chia 1 / rate
+        BigDecimal fromRate = EXCHANGE_RATES.get(fromCurrency);
+        BigDecimal toRate = EXCHANGE_RATES.get(toCurrency);
+        return toRate.divide(fromRate, 12, RoundingMode.HALF_UP);
     }
 
     @Override
