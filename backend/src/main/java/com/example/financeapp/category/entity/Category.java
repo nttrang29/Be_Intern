@@ -2,6 +2,7 @@ package com.example.financeapp.category.entity;
 
 import com.example.financeapp.transaction.entity.TransactionType;
 import com.example.financeapp.user.entity.User;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
@@ -16,16 +17,18 @@ public class Category {
     @Column(name = "category_name", nullable = false)
     private String categoryName;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "type_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private TransactionType transactionType;
 
     // Đổi từ icon → description
     @Column(name = "description")
     private String description;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = true)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "passwordHash", "provider", "enabled", "role", "googleAccount", "firstLogin", "locked", "deleted", "resetToken", "resetTokenExpiredAt", "createdAt", "updatedAt", "lastActiveAt"})
     private User user;
 
     @Column(name = "is_system", nullable = false)

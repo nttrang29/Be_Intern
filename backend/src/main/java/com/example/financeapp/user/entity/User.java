@@ -1,5 +1,6 @@
 package com.example.financeapp.user.entity;
 
+import com.example.financeapp.security.Role;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -28,26 +29,58 @@ public class User {
     @Column(name = "enabled")
     private boolean enabled = false;
 
-    @Column(name = "verification_code")
-    private String verificationCode;   // Mã OTP hoặc mã xác minh email
-
-    @Column(name = "code_generated_at")
-    private LocalDateTime codeGeneratedAt;
-
-    // ===== Giới hạn OTP =====
-    @Column(name = "otp_request_count")
-    private int otpRequestCount = 0;   // số lần gửi OTP trong 1 giờ
-
-    @Column(name = "otp_last_request")
-    private LocalDateTime otpLastRequest;  // lần cuối gửi OTP
-
     // ===== Avatar người dùng =====
     @Column(name = "avatar", columnDefinition = "MEDIUMTEXT")
     private String avatar;
 
-    // Dùng để đánh dấu tài khoản có đang dùng mật khẩu mặc định không
-    @Column(name = "has_default_password")
-    private Boolean hasDefaultPassword = false;
+    // ===== Quyền hệ thống =====
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    private Role role = Role.USER;
+
+    @Column(name = "locked")
+    private boolean locked = false;
+
+    // ===== Google Login =====
+    @Column(name = "google_account")
+    private boolean googleAccount = false;
+
+    @Column(name = "first_login")
+    private boolean firstLogin = false;
+
+    // ===== Quên mật khẩu =====
+    @Column(name = "reset_token")
+    private String resetToken;
+
+    @Column(name = "reset_token_expired_at")
+    private LocalDateTime resetTokenExpiredAt;
+
+    // ===== Soft delete + hoạt động gần nhất =====
+    @Column(name = "deleted", nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "last_active_at")
+    private LocalDateTime lastActiveAt;
+
+    // ===== Auditing =====
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    public void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        if (this.googleAccount) {
+            this.firstLogin = true;
+        }
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     // ===========================
     // GETTERS & SETTERS
@@ -100,38 +133,6 @@ public class User {
         this.enabled = enabled;
     }
 
-    public String getVerificationCode() {
-        return verificationCode;
-    }
-
-    public void setVerificationCode(String verificationCode) {
-        this.verificationCode = verificationCode;
-    }
-
-    public LocalDateTime getCodeGeneratedAt() {
-        return codeGeneratedAt;
-    }
-
-    public void setCodeGeneratedAt(LocalDateTime codeGeneratedAt) {
-        this.codeGeneratedAt = codeGeneratedAt;
-    }
-
-    public int getOtpRequestCount() {
-        return otpRequestCount;
-    }
-
-    public void setOtpRequestCount(int otpRequestCount) {
-        this.otpRequestCount = otpRequestCount;
-    }
-
-    public LocalDateTime getOtpLastRequest() {
-        return otpLastRequest;
-    }
-
-    public void setOtpLastRequest(LocalDateTime otpLastRequest) {
-        this.otpLastRequest = otpLastRequest;
-    }
-
     public String getAvatar() {
         return avatar;
     }
@@ -140,11 +141,83 @@ public class User {
         this.avatar = avatar;
     }
 
-    public Boolean getHasDefaultPassword() {
-        return hasDefaultPassword;
+    public Role getRole() {
+        return role;
     }
 
-    public void setHasDefaultPassword(Boolean hasDefaultPassword) {
-        this.hasDefaultPassword = hasDefaultPassword;
+    public void setRole(Role role) {
+        this.role = role;
+    }
+
+    public boolean isLocked() {
+        return locked;
+    }
+
+    public void setLocked(boolean locked) {
+        this.locked = locked;
+    }
+
+    public boolean isGoogleAccount() {
+        return googleAccount;
+    }
+
+    public void setGoogleAccount(boolean googleAccount) {
+        this.googleAccount = googleAccount;
+    }
+
+    public boolean isFirstLogin() {
+        return firstLogin;
+    }
+
+    public void setFirstLogin(boolean firstLogin) {
+        this.firstLogin = firstLogin;
+    }
+
+    public String getResetToken() {
+        return resetToken;
+    }
+
+    public void setResetToken(String resetToken) {
+        this.resetToken = resetToken;
+    }
+
+    public LocalDateTime getResetTokenExpiredAt() {
+        return resetTokenExpiredAt;
+    }
+
+    public void setResetTokenExpiredAt(LocalDateTime resetTokenExpiredAt) {
+        this.resetTokenExpiredAt = resetTokenExpiredAt;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public LocalDateTime getLastActiveAt() {
+        return lastActiveAt;
+    }
+
+    public void setLastActiveAt(LocalDateTime lastActiveAt) {
+        this.lastActiveAt = lastActiveAt;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

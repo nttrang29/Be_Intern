@@ -67,6 +67,8 @@ public class ProfileController {
         userInfo.put("provider", user.getProvider());
         userInfo.put("avatar", user.getAvatar());
         userInfo.put("enabled", user.isEnabled());
+        // Thêm role để frontend biết quyền của user
+        userInfo.put("role", user.getRole() != null ? user.getRole().name() : "USER");
         // Thêm thông tin về việc user đã có password chưa
         boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().trim().isEmpty();
         userInfo.put("hasPassword", hasPassword);

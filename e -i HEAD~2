@@ -1,0 +1,78 @@
+[33m6eef120[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/test_24_11[m[33m)[m thêm phân quyền
+[33m2d4fae9[m[33m ([m[1;32mfeature/update_22_11[m[33m)[m thêm phân quyền
+[33m61f7d53[m[33m ([m[1;31morigin/feature/update_22_11[m[33m)[m sửa logic
+[33m8c17af4[m sửa backend 22/11
+[33m941f035[m[33m ([m[1;31morigin/feature/fix_folder_21_11[m[33m, [m[1;32mfeature/fix_folder_21_11[m[33m)[m tối ưu folder
+[33m83768e4[m sửa cấu trúc folder
+[33m4c9d1e1[m sắp xếp lại folder
+[33m961ac8a[m[33m ([m[1;31morigin/feature/fix_otp_21_11[m[33m, [m[1;32mfeature/fix_otp_21_11[m[33m)[m sửa otp
+[33m59ba67c[m[33m ([m[1;31morigin/feature/update_21_11[m[33m)[m update 21/11
+[33md148a4b[m[33m ([m[1;31morigin/feature/test_21_11[m[33m)[m sửa hiển thị đúng giá tiền
+[33me1125ec[m[33m ([m[1;31morigin/develop[m[33m)[m sửa thời hạn token
+[33m769c8b7[m thêm điều kiện
+[33mf9a75ba[m thêm điều kiện
+[33m4eb0270[m sửa lỗi
+[33m5633e48[m sửa thêm ngân sách
+[33m671317e[m Merge pull request #37 from tuanburh1134/feature/CreateBudget
+[33md953152[m[33m ([m[1;31morigin/feature/CreateBudget[m[33m)[m create budget
+[33mdb4fad0[m Merge pull request #36 from tuanburh1134/feature/test_20_11
+[33m8ed8dbf[m call API
+[33m5e39107[m[33m ([m[1;31morigin/feature/update_19_11[m[33m)[m update 19/11
+[33m17897a6[m Merge pull request #35 from tuanburh1134/feature/test_19_11
+[33m0912bff[m[33m ([m[1;31morigin/feature/test_19_11[m[33m)[m fix gộp ví
+[33m7a00137[m call API 19/11
+[33m76444fd[m[33m ([m[1;31morigin/feature/test_18_11[m[33m)[m sửa
+[33m45d7340[m sửa
+[33mb25f1c7[m[33m ([m[1;31morigin/feature/18_11[m[33m)[m Merge pull request #34 from tuanburh1134/fix_wallets_18_11
+[33m65f3ead[m[33m ([m[1;31morigin/fix_wallets_18_11[m[33m)[m Merge branch 'feature/18_11' into fix_wallets_18_11
+[33m12ba49a[m update
+[33m092f684[m sửa danh mục
+[33m88c6a76[m backend mới
+[33m505b230[m sửa chức năng ví
+[33m5ce0fe5[m[33m ([m[1;31morigin/feature/fix_Bug_S1[m[33m)[m sua lai xoa
+[33m5c754cb[m Merge pull request #33 from tuanburh1134/feature/fix_Bug_S1
+[33m24f2a6f[m fix loi vi
+[33m4de584e[m Merge pull request #32 from tuanburh1134/feature/fix_categories_15_11
+[33m658b3e4[m[33m ([m[1;31morigin/feature/fix_categories_15_11[m[33m)[m Merge branch 'feature/fix_Bug_S1' into feature/fix_categories_15_11
+[33m97f3d0f[m sửa jwtfilter
+[33mb7989f2[m sửa chức năng danh mục
+[33m7088e56[m Merge pull request #30 from tuanburh1134/feature/fix_Bug_S1
+[33m6150d1f[m Merge branch 'develop' into feature/fix_Bug_S1
+[33ma3fdef8[m fix lai cac chuc nang co ban
+[33m695c1ee[m[33m ([m[1;31morigin/feature/test_14_11[m[33m)[m test
+[33m6d21424[m[33m ([m[1;31morigin/feature/14_11[m[33m)[m sửa lỗi
+[33md5c0529[m[33m ([m[1;31morigin/feature/deleteCategory[m[33m)[m  xoa danh muc
+[33md355d5f[m  xoa danh muc
+[33m13583ca[m[33m ([m[1;31morigin/feature/updateCategory[m[33m)[m  cap nhat danh muc
+[33m547da5c[m thêm danh mục
+[33m3caecf5[m[33m ([m[1;31morigin/feature/update_fix_share_wallet[m[33m)[m @Tùng Nguyễn sửa lại chuyển tiền giữa các ví nó đang bị chung trong cái giao dịch mà cái data của giao dịch đang ràng buộc với category_id nên khi chuyển tiền ví sang ví khác nó tự chọn category_id =1 giờ tách ra 1 cái bảng data base riêng của cái chuyển tiền nội bộ ý không có category_id
+[33m61ab37c[m[33m ([m[1;31morigin/feature/transfer_personal_to_group_wallet[m[33m)[m Cập nhật mặc định số dư khi tạo ví =0 và thêm chức năng chuyển đổi ví cá nhân sang ví nhóm.
+[33m7c8af80[m[33m ([m[1;31morigin/feature/fix_share_wallet[m[33m)[m sửa lại các lỗi share wallet: SỬA LẠI Ở SERVICE IMPL PHẦN TRANSER, VÍ XEM CHI TIẾT MẶC ĐỊNH LÀ VÍ NGUỒN, CHỌC VÀO DATA VÍ NHÓM
+[33mdd87ee3[m[33m ([m[1;31morigin/feature/12_11[m[33m)[m update sửa và xóa, chuyển đổi tiền tệ và gộp ví (xóa mk mặc định login bằng google)
+[33m3b4f9ef[m Merge pull request #25 from tuanburh1134/feature/test_11_11
+[33m5dcf066[m[33m ([m[1;31morigin/feature/test_11_11[m[33m)[m Æ cÃập nhÃật tính năng sÆửa ví
+[33m535209a[m[33m ([m[1;31morigin/feature/merge_wallet[m[33m)[m Là người dùng, tôi muốn gộp ví cá nhân
+[33m8d09cc8[m sua lai
+[33mcf14933[m them lai tao vi
+[33m8ea62f7[m test
+[33mac9b683[m Merge pull request #20 from tuanburh1134/feature/share_wallet
+[33m6bf8a4f[m thêm giao dịch thu và chi
+[33ma23bea9[m[33m ([m[1;31morigin/feature/share_wallet[m[33m)[m Là người dùng, tôi muốn chia sẻ ví chung với vợ/chồng để cùng quản lý tài chính gia đình.
+[33m01004e8[m[33m ([m[1;31morigin/feature/fig_bug_google[m[33m)[m Khi đăng nhập bằng Google sẽ tự động tạo mật khẩu mặc định cho tài khoản đó, người dùng có thể đổi mật khẩu hoặc xem nếu không biết.
+[33m308cd6e[m sua authcontroller
+[33madcd018[m Merge pull request #19 from tuanburh1134/feature/fix_see_wallets
+[33m33bc16b[m[33m ([m[1;31morigin/feature/fix_see_wallets[m[33m)[m Merge branch 'develop' into feature/fix_see_wallets
+[33me129da5[m Merge pull request #12 from tuanburh1134/feature/createWallets
+[33m73f2614[m[33m ([m[1;31morigin/feature/createWallets[m[33m)[m khôi phục
+[33ma322f68[m User Google giờ có thể: Đăng nhập bằng Google (như trước) Đăng nhập bằng email + mật khẩu mặc định (an toàn) Xem mật khẩu mặc định bất kỳ lúc nào Đổi sang mật khẩu tùy chỉnh (không cần mật khẩu cũ) 🔒 Bảo mật tốt hơn: Mỗi user có mật khẩu riêng Không ai có thể đoán mật khẩu của người khác Không cần hardcode mật khẩu chung
+[33mef5a619[m sửa xem ví
+[33mffd2f42[m fix tao theo user_id
+[33mc54747c[m  tao vi moi
+[33mded1c26[m Merge pull request #10 from tuanburh1134/feature/edit_profife
+[33mf370ea4[m Là người dùng, tôi muốn chỉnh sửa thông tin cá nhân (tên, avatar), để cá nhân hóa trải nghiệm sử dụng. và fix bug lưu data login google
+[33m270d427[m[33m ([m[1;31morigin/feature/fixbug[m[33m)[m sua loi sprint 1
+[33md2fed80[m[33m ([m[1;31morigin/feature/xforgot_reset_password[m[33m)[m them validation dang ki, doi mat khau
+[33m04d52fc[m them chuc nang khoi phuc mat khau
+[33ma3ff7bf[m  update_login
+[33m06f14c6[m[33m ([m[1;31morigin/feature/login_logout_google[m[33m)[m dang nhap dang xuat bang google va xac thuc 2 lop
+[33m250a1f2[m first commit

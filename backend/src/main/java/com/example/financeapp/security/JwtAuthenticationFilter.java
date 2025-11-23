@@ -1,78 +1,79 @@
 package com.example.financeapp.security;
 
 import com.example.financeapp.config.JwtUtil;
-import com.example.financeapp.user.entity.User;
-import com.example.financeapp.user.repository.UserRepository;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.SignatureException;
-import io.jsonwebtoken.UnsupportedJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections; // 👈 1. THÊM IMPORT NÀY
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    @Autowired private JwtUtil jwtUtil;
-    @Autowired private UserRepository userRepository;
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
+    private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService userDetailsService;
+
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
+        this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
+    }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
-            throws ServletException, IOException {
-
-        String authHeader = request.getHeader("Authorization");
-        String token = null;
-        String email = null;
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
         try {
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-                email = jwtUtil.extractEmail(token);
-            }
+            String jwt = getJwtFromRequest(request);
 
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                if (jwtUtil.validateToken(token, email)) {
-                    // LẤY USER TỪ DB
-                    User user = userRepository.findByEmail(email)
-                            .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+            if (StringUtils.hasText(jwt)) {
+                String email = jwtUtil.extractEmail(jwt);
+                
+                if (email != null && jwtUtil.validateToken(jwt, email)) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                    // TẠO CustomUserDetails
-                    CustomUserDetails userDetails = new CustomUserDetails(user);
-
-                    // SET VÀO SecurityContext
-                    UsernamePasswordAuthenticationToken authToken =
+                    UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
-                                    userDetails, null, userDetails.getAuthorities()
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
                             );
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                    authentication.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request)
+                    );
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
-
-        } catch (ExpiredJwtException e) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token đã hết hạn");
-            return;
-        } catch (SignatureException | MalformedJwtException | UnsupportedJwtException e) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token không hợp lệ");
-            return;
-        } catch (Exception e) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Lỗi xác thực: " + e.getMessage());
-            return;
+        } catch (Exception ex) {
+            // không ném lỗi ra ngoài để tránh vỡ flow – chỉ log
+            log.error("Không thể thiết lập xác thực cho người dùng trong SecurityContext", ex);
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String getJwtFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken) &&
+                bearerToken.toLowerCase().startsWith("bearer ")) {
+            return bearerToken.substring(7).trim();
+        }
+        return null;
     }
 }
