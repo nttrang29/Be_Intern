@@ -1,7 +1,9 @@
 package com.example.financeapp.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public class ApiException extends RuntimeException {
 
     private final ApiErrorCode code;
@@ -15,14 +17,6 @@ public class ApiException extends RuntimeException {
 
     public ApiException(ApiErrorCode code, String message) {
         this(code, message, HttpStatus.BAD_REQUEST);
-    }
-
-    public ApiErrorCode getCode() {
-        return code;
-    }
-
-    public HttpStatus getStatus() {
-        return status;
     }
 }
 
