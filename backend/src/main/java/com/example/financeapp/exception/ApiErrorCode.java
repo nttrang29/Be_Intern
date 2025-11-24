@@ -4,12 +4,12 @@ public enum ApiErrorCode {
 
     // AUTH / USER
     USER_NOT_FOUND,
-    USER_DELETED,
+    USER_DELETED,             // 🔥 thêm mới
     EMAIL_ALREADY_EXISTS,
     ACCOUNT_LOCKED,
     INVALID_CREDENTIALS,
     GOOGLE_ACCOUNT_ONLY,
-    GOOGLE_TOKEN_INVALID,
+    GOOGLE_TOKEN_INVALID,     // 🔥 thêm mới
     PASSWORD_NOT_SET,
     PASSWORD_SAME_AS_OLD,
     PASSWORD_ALREADY_SET,
@@ -37,4 +37,3 @@ public enum ApiErrorCode {
     // SYSTEM
     INTERNAL_ERROR
 }
-
