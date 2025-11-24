@@ -1,33 +1,15 @@
 package com.example.financeapp.auth.dto;
 
+import jakarta.validation.constraints.*;
+import lombok.Data;
+
+@Data
 public class ChangePasswordRequest {
-    private String oldPassword;  // Nullable cho lần đổi đầu tiên từ mật khẩu mặc định
+
+    @NotBlank(message = "Mật khẩu cũ không được để trống")
+    private String oldPassword;
+
+    @NotBlank(message = "Mật khẩu mới không được để trống")
+    @Size(min = 6, max = 100, message = "Mật khẩu mới phải từ 6 ký tự trở lên")
     private String newPassword;
-    private String confirmPassword;
-
-    // Getters & Setters
-    public String getOldPassword() {
-        return oldPassword;
-    }
-
-    public void setOldPassword(String oldPassword) {
-        this.oldPassword = oldPassword;
-    }
-
-    public String getNewPassword() {
-        return newPassword;
-    }
-
-    public void setNewPassword(String newPassword) {
-        this.newPassword = newPassword;
-    }
-
-    public String getConfirmPassword() {
-        return confirmPassword;
-    }
-
-    public void setConfirmPassword(String confirmPassword) {
-        this.confirmPassword = confirmPassword;
-    }
 }
-

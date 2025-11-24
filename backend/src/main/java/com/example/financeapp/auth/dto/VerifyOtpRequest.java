@@ -1,7 +1,9 @@
 package com.example.financeapp.auth.dto;
 
 import jakarta.validation.constraints.*;
+import lombok.Data;
 
+@Data
 public class VerifyOtpRequest {
 
     @Email(message = "Email không hợp lệ")
@@ -18,38 +20,4 @@ public class VerifyOtpRequest {
 
     @NotBlank(message = "Họ tên không được để trống")
     private String fullName;
-
-    // Getters and Setters
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getOtp() {
-        return otp;
-    }
-
-    public void setOtp(String otp) {
-        this.otp = otp;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getFullName() {
-        return fullName;
-    }
-
-    public void setFullName(String fullName) {
-        this.fullName = fullName;
-    }
 }
-
