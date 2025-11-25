@@ -131,14 +131,106 @@ public class BudgetCheckServiceImpl implements BudgetCheckService {
                     mostSevereWarning = BudgetWarningResponse.createExceededWarning(budget, currentSpent);
                 }
             } 
-            // Kiểm tra gần hết (>= 80% nhưng chưa vượt)
-            else if (usagePercentage >= 80.0) {
+            // Kiểm tra gần hết (>= warningThreshold% nhưng chưa vượt)
+            Double warningThreshold = budget.getWarningThreshold() != null 
+                    ? budget.getWarningThreshold() : 80.0; // Mặc định 80% nếu null
+            if (usagePercentage >= warningThreshold) {
                 // Chỉ lưu nếu chưa có cảnh báo vượt hạn mức và phần trăm cao hơn
                 if (mostSevereWarning == null || 
                     (mostSevereWarning.getWarningType().equals("NEARLY_EXHAUSTED") && 
                      usagePercentage > maxUsagePercentage)) {
                     maxUsagePercentage = usagePercentage;
                     mostSevereWarning = BudgetWarningResponse.createNearlyExhaustedWarning(budget, currentSpent);
+                }
+            }
+        }
+
+        return mostSevereWarning != null ? mostSevereWarning : BudgetWarningResponse.noWarning();
+    }
+
+    @Override
+    public BudgetWarningResponse previewBudgetWarning(
+            Long userId,
+            Long categoryId,
+            Long walletId,
+            BigDecimal amount,
+            LocalDate transactionDate
+    ) {
+        // Tìm các budget áp dụng cho giao dịch này
+        List<Budget> applicableBudgets = budgetRepository.findApplicableBudgets(
+                userId,
+                categoryId,
+                walletId,
+                transactionDate
+        );
+
+        BudgetWarningResponse mostSevereWarning = null;
+        BigDecimal maxExceededAmount = BigDecimal.ZERO;
+        double maxUsagePercentage = 0.0;
+
+        // Kiểm tra từng budget
+        for (Budget budget : applicableBudgets) {
+            // Tính tổng số tiền đã chi TRƯỚC giao dịch này
+            Long budgetWalletId = budget.getWallet() != null ? budget.getWallet().getWalletId() : null;
+            BigDecimal spentBefore = transactionRepository.calculateTotalSpent(
+                    userId,
+                    categoryId,
+                    budgetWalletId,
+                    budget.getStartDate(),
+                    budget.getEndDate()
+            );
+            
+            // Tính tổng số tiền SAU giao dịch này
+            BigDecimal currentSpent = spentBefore.add(amount);
+            
+            // Tính phần trăm sử dụng SAU giao dịch
+            double usagePercentageAfter = 0.0;
+            if (budget.getAmountLimit().compareTo(BigDecimal.ZERO) > 0) {
+                usagePercentageAfter = currentSpent
+                        .divide(budget.getAmountLimit(), 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .doubleValue();
+            }
+
+            // Tính các giá trị cần thiết cho modal
+            BigDecimal remainingBefore = budget.getAmountLimit().subtract(spentBefore).max(BigDecimal.ZERO);
+            BigDecimal remainingAfter = budget.getAmountLimit().subtract(currentSpent).max(BigDecimal.ZERO);
+            BigDecimal exceededAmount = currentSpent.subtract(budget.getAmountLimit()).max(BigDecimal.ZERO);
+
+            // Lấy warningThreshold từ budget (mặc định 80% nếu null)
+            Double warningThreshold = budget.getWarningThreshold() != null 
+                    ? budget.getWarningThreshold() : 80.0;
+
+            // Kiểm tra vượt hạn mức (ưu tiên cao nhất) hoặc đạt warningThreshold%
+            if (currentSpent.compareTo(budget.getAmountLimit()) >= 0 || usagePercentageAfter >= warningThreshold) {
+                BudgetWarningResponse warning;
+                
+                if (currentSpent.compareTo(budget.getAmountLimit()) > 0) {
+                    // Vượt hạn mức
+                    warning = BudgetWarningResponse.createExceededWarning(budget, currentSpent);
+                    if (exceededAmount.compareTo(maxExceededAmount) > 0) {
+                        maxExceededAmount = exceededAmount;
+                        mostSevereWarning = warning;
+                    }
+                } else {
+                    // Gần hết hoặc đạt 100%
+                    warning = BudgetWarningResponse.createNearlyExhaustedWarning(budget, currentSpent);
+                    if (mostSevereWarning == null || 
+                        (mostSevereWarning.getWarningType().equals("NEARLY_EXHAUSTED") && 
+                         usagePercentageAfter > maxUsagePercentage)) {
+                        maxUsagePercentage = usagePercentageAfter;
+                        mostSevereWarning = warning;
+                    }
+                }
+                
+                // Set các field chi tiết cho modal preview
+                if (mostSevereWarning == warning) {
+                    mostSevereWarning.setSpentBeforeTransaction(spentBefore);
+                    mostSevereWarning.setRemainingBeforeTransaction(remainingBefore);
+                    mostSevereWarning.setTransactionAmount(amount);
+                    mostSevereWarning.setTotalAfterTransaction(currentSpent);
+                    mostSevereWarning.setRemainingAfterTransaction(remainingAfter);
+                    mostSevereWarning.setUsagePercentageAfterTransaction(usagePercentageAfter);
                 }
             }
         }

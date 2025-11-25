@@ -2,6 +2,7 @@ package com.example.financeapp.budget.controller;
 
 import com.example.financeapp.budget.dto.BudgetResponse;
 import com.example.financeapp.budget.dto.CreateBudgetRequest;
+import com.example.financeapp.budget.dto.UpdateBudgetRequest;
 import com.example.financeapp.budget.entity.Budget;
 import com.example.financeapp.transaction.entity.Transaction;
 import com.example.financeapp.user.entity.User;
@@ -116,6 +117,58 @@ public class BudgetController {
 
             res.put("transactions", transactions);
             res.put("total", transactions.size());
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
+     * Cập nhật ngân sách
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> updateBudget(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long budgetId,
+            @Valid @RequestBody UpdateBudgetRequest request
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            BudgetResponse budget = budgetService.updateBudget(user.getUserId(), budgetId, request);
+
+            res.put("message", "Cập nhật hạn mức chi tiêu thành công");
+            res.put("budget", budget);
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
+     * Xóa ngân sách
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteBudget(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long budgetId
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            budgetService.deleteBudget(user.getUserId(), budgetId);
+
+            res.put("message", "Xóa hạn mức chi tiêu thành công");
             return ResponseEntity.ok(res);
 
         } catch (RuntimeException e) {

@@ -34,6 +34,54 @@ public class TransactionController {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
     }
 
+    /**
+     * Preview cảnh báo budget TRƯỚC KHI tạo transaction (cho frontend hiển thị modal)
+     */
+    @PostMapping("/expense/preview")
+    public ResponseEntity<Map<String, Object>> previewExpenseBudgetWarning(
+            @Valid @RequestBody CreateTransactionRequest request
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+            BudgetWarningResponse warning = budgetCheckService.previewBudgetWarning(
+                    userId,
+                    request.getCategoryId(),
+                    request.getWalletId(),
+                    request.getAmount(),
+                    request.getTransactionDate().toLocalDate()
+            );
+            
+            if (warning != null && warning.isHasWarning()) {
+                Map<String, Object> warningMap = new HashMap<>();
+                warningMap.put("hasWarning", true);
+                warningMap.put("warningType", warning.getWarningType());
+                warningMap.put("budgetId", warning.getBudgetId());
+                warningMap.put("budgetName", warning.getBudgetName());
+                warningMap.put("amountLimit", warning.getAmountLimit());
+                warningMap.put("currentSpent", warning.getCurrentSpent());
+                warningMap.put("remainingAmount", warning.getRemainingAmount());
+                warningMap.put("exceededAmount", warning.getExceededAmount());
+                warningMap.put("usagePercentage", warning.getUsagePercentage());
+                warningMap.put("message", warning.getMessage());
+                warningMap.put("spentBeforeTransaction", warning.getSpentBeforeTransaction());
+                warningMap.put("remainingBeforeTransaction", warning.getRemainingBeforeTransaction());
+                warningMap.put("transactionAmount", warning.getTransactionAmount());
+                warningMap.put("totalAfterTransaction", warning.getTotalAfterTransaction());
+                warningMap.put("remainingAfterTransaction", warning.getRemainingAfterTransaction());
+                warningMap.put("usagePercentageAfterTransaction", warning.getUsagePercentageAfterTransaction());
+                res.put("budgetWarning", warningMap);
+            } else {
+                res.put("budgetWarning", Map.of("hasWarning", false));
+            }
+            
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        }
+    }
+
     @PostMapping("/expense")
     public ResponseEntity<Map<String, Object>> addExpense(@Valid @RequestBody CreateTransactionRequest request) {
         Map<String, Object> res = new HashMap<>();

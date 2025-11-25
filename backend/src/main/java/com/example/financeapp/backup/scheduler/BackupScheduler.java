@@ -36,8 +36,9 @@ public class BackupScheduler {
             return;
         }
 
-        List<User> users = userRepository.findByEnabledTrueAndDeletedFalse();
-        log.info("Bắt đầu backup tự động cho {} user", users.size());
+        // Chỉ backup user có bật auto backup
+        List<User> users = userRepository.findByEnabledTrueAndDeletedFalseAndAutoBackupEnabledTrue();
+        log.info("Bắt đầu backup tự động cho {} user (đã bật auto backup)", users.size());
 
         for (User user : users) {
             try {

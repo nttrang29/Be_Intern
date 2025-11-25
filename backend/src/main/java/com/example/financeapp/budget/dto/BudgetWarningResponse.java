@@ -18,6 +18,14 @@ public class BudgetWarningResponse {
     private BigDecimal exceededAmount; // Số tiền vượt (0 nếu không vượt)
     private Double usagePercentage;
     private String message; // Thông báo cho người dùng
+    
+    // Thêm các field để hiển thị chi tiết trong modal preview
+    private BigDecimal spentBeforeTransaction; // Đã chi TRƯỚC giao dịch này
+    private BigDecimal remainingBeforeTransaction; // Còn lại TRƯỚC giao dịch này
+    private BigDecimal transactionAmount; // Số tiền giao dịch này
+    private BigDecimal totalAfterTransaction; // Tổng SAU giao dịch này
+    private BigDecimal remainingAfterTransaction; // Còn lại SAU giao dịch này
+    private Double usagePercentageAfterTransaction; // % sử dụng SAU giao dịch này
 
     public BudgetWarningResponse() {}
 
@@ -188,6 +196,55 @@ public class BudgetWarningResponse {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    // Getters & Setters cho các field preview
+    public BigDecimal getSpentBeforeTransaction() {
+        return spentBeforeTransaction;
+    }
+
+    public void setSpentBeforeTransaction(BigDecimal spentBeforeTransaction) {
+        this.spentBeforeTransaction = spentBeforeTransaction;
+    }
+
+    public BigDecimal getRemainingBeforeTransaction() {
+        return remainingBeforeTransaction;
+    }
+
+    public void setRemainingBeforeTransaction(BigDecimal remainingBeforeTransaction) {
+        this.remainingBeforeTransaction = remainingBeforeTransaction;
+    }
+
+    public BigDecimal getTransactionAmount() {
+        return transactionAmount;
+    }
+
+    public void setTransactionAmount(BigDecimal transactionAmount) {
+        this.transactionAmount = transactionAmount;
+    }
+
+    public BigDecimal getTotalAfterTransaction() {
+        return totalAfterTransaction;
+    }
+
+    public void setTotalAfterTransaction(BigDecimal totalAfterTransaction) {
+        this.totalAfterTransaction = totalAfterTransaction;
+    }
+
+    public BigDecimal getRemainingAfterTransaction() {
+        return remainingAfterTransaction;
+    }
+
+    public void setRemainingAfterTransaction(BigDecimal remainingAfterTransaction) {
+        this.remainingAfterTransaction = remainingAfterTransaction;
+    }
+
+    public Double getUsagePercentageAfterTransaction() {
+        return usagePercentageAfterTransaction;
+    }
+
+    public void setUsagePercentageAfterTransaction(Double usagePercentageAfterTransaction) {
+        this.usagePercentageAfterTransaction = usagePercentageAfterTransaction;
     }
 }
 

@@ -15,7 +15,13 @@ public interface FundMemberRepository extends JpaRepository<FundMember, Long> {
     /**
      * Lấy tất cả thành viên của quỹ
      */
-    List<FundMember> findByFund_FundIdOrderByJoinedAtAsc(Long fundId);
+    @Query("""
+        SELECT fm FROM FundMember fm
+        LEFT JOIN FETCH fm.user
+        WHERE fm.fund.fundId = :fundId
+        ORDER BY fm.joinedAt ASC
+        """)
+    List<FundMember> findByFund_FundIdOrderByJoinedAtAsc(@Param("fundId") Long fundId);
 
     /**
      * Kiểm tra user có phải thành viên quỹ không
@@ -31,7 +37,10 @@ public interface FundMemberRepository extends JpaRepository<FundMember, Long> {
      * Lấy quỹ nhóm mà user tham gia (không phải chủ quỹ)
      */
     @Query("""
-        SELECT fm.fund FROM FundMember fm
+        SELECT DISTINCT fm.fund FROM FundMember fm
+        LEFT JOIN FETCH fm.fund.owner
+        LEFT JOIN FETCH fm.fund.targetWallet
+        LEFT JOIN FETCH fm.fund.sourceWallet
         WHERE fm.user.userId = :userId
           AND fm.role = 'CONTRIBUTOR'
         ORDER BY fm.fund.createdAt DESC

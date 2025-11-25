@@ -86,10 +86,13 @@ public class ScheduledTransactionServiceImpl implements ScheduledTransactionServ
             throw new RuntimeException("Số tiền phải lớn hơn 0");
         }
 
-        // 6. Validate schedule type specific fields
+        // 6. Validate dates
+        validateDates(request);
+
+        // 7. Validate schedule type specific fields
         validateScheduleTypeFields(request);
 
-        // 7. Tạo scheduled transaction
+        // 8. Tạo scheduled transaction
         ScheduledTransaction scheduled = new ScheduledTransaction();
         scheduled.setUser(user);
         scheduled.setWallet(wallet);
@@ -108,7 +111,7 @@ public class ScheduledTransactionServiceImpl implements ScheduledTransactionServ
         scheduled.setMonth(request.getMonth());
         scheduled.setDay(request.getDay());
 
-        // 8. Tính nextExecutionDate
+        // 9. Tính nextExecutionDate
         scheduled.setNextExecutionDate(calculateInitialNextExecutionDate(request));
 
         scheduled = scheduledTransactionRepository.save(scheduled);
@@ -149,6 +152,33 @@ public class ScheduledTransactionServiceImpl implements ScheduledTransactionServ
         }
 
         scheduledTransactionRepository.delete(scheduled);
+    }
+
+    @Override
+    @Transactional
+    public ScheduledTransactionResponse cancelScheduledTransaction(Long userId, Long scheduleId) {
+        ScheduledTransaction scheduled = scheduledTransactionRepository.findById(scheduleId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch giao dịch"));
+
+        if (!scheduled.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("Bạn không có quyền hủy lịch giao dịch này");
+        }
+
+        // Kiểm tra nếu đã hủy rồi
+        if (scheduled.getStatus() == ScheduleStatus.CANCELLED) {
+            throw new RuntimeException("Lịch giao dịch này đã được hủy trước đó");
+        }
+
+        // Kiểm tra nếu đã hoàn thành
+        if (scheduled.getStatus() == ScheduleStatus.COMPLETED) {
+            throw new RuntimeException("Không thể hủy lịch giao dịch đã hoàn thành");
+        }
+
+        // Đổi status thành CANCELLED
+        scheduled.setStatus(ScheduleStatus.CANCELLED);
+        scheduled = scheduledTransactionRepository.save(scheduled);
+
+        return ScheduledTransactionResponse.fromEntity(scheduled);
     }
 
     @Override
@@ -229,6 +259,17 @@ public class ScheduledTransactionServiceImpl implements ScheduledTransactionServ
             scheduledTransactionRepository.save(scheduled);
             throw e;
         }
+    }
+
+    @Override
+    public LocalDate previewNextExecutionDate(CreateScheduledTransactionRequest request) {
+        // Validate cơ bản trước khi tính
+        if (request.getStartDate() == null || request.getExecutionTime() == null) {
+            return null;
+        }
+        
+        // Tính nextExecutionDate tương tự như calculateInitialNextExecutionDate
+        return calculateInitialNextExecutionDate(request);
     }
 
     @Override
@@ -373,6 +414,44 @@ public class ScheduledTransactionServiceImpl implements ScheduledTransactionServ
                 
             default:
                 return request.getStartDate();
+        }
+    }
+
+    /**
+     * Validate dates (startDate, endDate)
+     */
+    private void validateDates(CreateScheduledTransactionRequest request) {
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+        
+        // Validate startDate
+        if (request.getStartDate() == null) {
+            throw new RuntimeException("Vui lòng chọn ngày bắt đầu");
+        }
+        
+        // Cho ONCE: startDate phải >= today (hoặc >= today + executionTime nếu cùng ngày)
+        if (request.getScheduleType() == ScheduleType.ONCE) {
+            if (request.getStartDate().isBefore(today)) {
+                throw new RuntimeException("Ngày thực hiện không được là ngày trong quá khứ");
+            }
+            if (request.getStartDate().equals(today) && 
+                request.getExecutionTime() != null && 
+                request.getExecutionTime().isBefore(now)) {
+                throw new RuntimeException("Thời gian thực hiện không được là thời gian trong quá khứ");
+            }
+        }
+        
+        // Validate endDate (nếu có)
+        if (request.getEndDate() != null) {
+            // endDate chỉ áp dụng cho recurring (không phải ONCE)
+            if (request.getScheduleType() == ScheduleType.ONCE) {
+                throw new RuntimeException("Lịch một lần không cần ngày kết thúc");
+            }
+            
+            // endDate phải >= startDate
+            if (request.getEndDate().isBefore(request.getStartDate())) {
+                throw new RuntimeException("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu");
+            }
         }
     }
 

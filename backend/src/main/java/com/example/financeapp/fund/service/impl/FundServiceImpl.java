@@ -239,8 +239,9 @@ public class FundServiceImpl implements FundService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public FundResponse getFundById(Long userId, Long fundId) {
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         // Kiểm tra quyền: user phải là chủ quỹ hoặc thành viên
@@ -255,7 +256,7 @@ public class FundServiceImpl implements FundService {
     @Override
     @Transactional
     public FundResponse updateFund(Long userId, Long fundId, UpdateFundRequest request) {
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         // Kiểm tra quyền: chỉ chủ quỹ mới được sửa
@@ -340,7 +341,7 @@ public class FundServiceImpl implements FundService {
     @Override
     @Transactional
     public void closeFund(Long userId, Long fundId) {
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         if (!fund.getOwner().getUserId().equals(userId)) {
@@ -354,7 +355,7 @@ public class FundServiceImpl implements FundService {
     @Override
     @Transactional
     public void deleteFund(Long userId, Long fundId) {
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         if (!fund.getOwner().getUserId().equals(userId)) {
@@ -371,7 +372,7 @@ public class FundServiceImpl implements FundService {
     @Override
     @Transactional
     public FundResponse depositToFund(Long userId, Long fundId, BigDecimal amount) {
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         // Kiểm tra quyền
@@ -410,7 +411,7 @@ public class FundServiceImpl implements FundService {
     @Override
     @Transactional
     public FundResponse withdrawFromFund(Long userId, Long fundId, BigDecimal amount) {
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         // Chỉ quỹ không kỳ hạn mới được rút

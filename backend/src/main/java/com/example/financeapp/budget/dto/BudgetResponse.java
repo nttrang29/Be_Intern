@@ -27,6 +27,7 @@ public class BudgetResponse {
     private LocalDate startDate;
     private LocalDate endDate;
     private String note;
+    private Double warningThreshold; // Ngưỡng cảnh báo (%)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -73,11 +74,16 @@ public class BudgetResponse {
             response.setUsagePercentage(0.0);
         }
         
-        // Xác định trạng thái (OK, WARNING, EXCEEDED)
+        // Lấy warningThreshold từ budget (mặc định 80% nếu null)
+        Double warningThreshold = budget.getWarningThreshold() != null 
+                ? budget.getWarningThreshold() : 80.0;
+        response.setWarningThreshold(warningThreshold);
+        
+        // Xác định trạng thái (OK, WARNING, EXCEEDED) dựa trên warningThreshold
         if (spentAmount.compareTo(budget.getAmountLimit()) > 0) {
             response.setStatus("EXCEEDED"); // Vượt ngân sách
-        } else if (response.getUsagePercentage() >= 80.0) {
-            response.setStatus("WARNING"); // Sắp hết (>= 80%)
+        } else if (response.getUsagePercentage() >= warningThreshold) {
+            response.setStatus("WARNING"); // Sắp hết (>= warningThreshold%)
         } else {
             response.setStatus("OK"); // Bình thường
         }
@@ -223,6 +229,14 @@ public class BudgetResponse {
 
     public void setNote(String note) {
         this.note = note;
+    }
+
+    public Double getWarningThreshold() {
+        return warningThreshold;
+    }
+
+    public void setWarningThreshold(Double warningThreshold) {
+        this.warningThreshold = warningThreshold;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -27,9 +27,14 @@ public interface ScheduledTransactionService {
     ScheduledTransactionResponse getScheduledTransactionById(Long userId, Long scheduleId);
     
     /**
-     * Xóa scheduled transaction
+     * Xóa scheduled transaction (xóa hoàn toàn khỏi database)
      */
     void deleteScheduledTransaction(Long userId, Long scheduleId);
+    
+    /**
+     * Hủy scheduled transaction (đổi status thành CANCELLED, không xóa)
+     */
+    ScheduledTransactionResponse cancelScheduledTransaction(Long userId, Long scheduleId);
     
     /**
      * Thực hiện một scheduled transaction (được gọi bởi scheduler)
@@ -40,5 +45,12 @@ public interface ScheduledTransactionService {
      * Tính toán ngày thực hiện tiếp theo dựa trên scheduleType
      */
     java.time.LocalDate calculateNextExecutionDate(ScheduledTransaction scheduledTransaction);
+    
+    /**
+     * Preview ngày thực hiện tiếp theo TRƯỚC KHI tạo scheduled transaction (cho frontend hiển thị mini preview)
+     * @param request Request để tạo scheduled transaction
+     * @return LocalDate - Ngày thực hiện tiếp theo (hoặc null nếu không hợp lệ)
+     */
+    java.time.LocalDate previewNextExecutionDate(com.example.financeapp.scheduledtransaction.dto.CreateScheduledTransactionRequest request);
 }
 

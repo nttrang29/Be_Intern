@@ -24,4 +24,14 @@ public interface BudgetService {
      * Lấy danh sách giao dịch thuộc một budget cụ thể
      */
     List<Transaction> getBudgetTransactions(Long userId, Long budgetId);
+    
+    /**
+     * Cập nhật ngân sách
+     */
+    BudgetResponse updateBudget(Long userId, Long budgetId, com.example.financeapp.budget.dto.UpdateBudgetRequest request);
+    
+    /**
+     * Xóa ngân sách
+     */
+    void deleteBudget(Long userId, Long budgetId);
 }

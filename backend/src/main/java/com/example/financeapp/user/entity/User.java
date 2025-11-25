@@ -62,6 +62,10 @@ public class User {
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
 
+    // ===== Auto Backup =====
+    @Column(name = "auto_backup_enabled")
+    private Boolean autoBackupEnabled = false; // Mặc định tắt auto backup (Boolean để tránh lỗi null với user cũ)
+
     // ===== Auditing =====
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -203,6 +207,14 @@ public class User {
 
     public void setLastActiveAt(LocalDateTime lastActiveAt) {
         this.lastActiveAt = lastActiveAt;
+    }
+
+    public boolean isAutoBackupEnabled() {
+        return autoBackupEnabled != null ? autoBackupEnabled : false; // Trả về false nếu null (user cũ)
+    }
+
+    public void setAutoBackupEnabled(Boolean autoBackupEnabled) {
+        this.autoBackupEnabled = autoBackupEnabled != null ? autoBackupEnabled : false;
     }
 
     public LocalDateTime getCreatedAt() {

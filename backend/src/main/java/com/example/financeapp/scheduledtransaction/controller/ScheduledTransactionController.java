@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,39 @@ public class ScheduledTransactionController {
 
     @Autowired
     private ScheduledTransactionService scheduledTransactionService;
+
+    /**
+     * Preview ngày thực hiện tiếp theo (cho frontend hiển thị mini preview)
+     */
+    @PostMapping("/preview")
+    public ResponseEntity<Map<String, Object>> previewScheduledTransaction(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody CreateScheduledTransactionRequest request
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            LocalDate nextExecutionDate = scheduledTransactionService.previewNextExecutionDate(request);
+            
+            if (nextExecutionDate != null) {
+                res.put("hasPreview", true);
+                res.put("nextExecutionDate", nextExecutionDate);
+                res.put("executionTime", request.getExecutionTime());
+                res.put("message", String.format("Lần thực hiện tiếp theo: %s lúc %s", 
+                        nextExecutionDate, request.getExecutionTime()));
+            } else {
+                res.put("hasPreview", false);
+                res.put("message", "Chưa chọn thời điểm chạy.");
+            }
+            
+            return ResponseEntity.ok(res);
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
 
     /**
      * Tạo scheduled transaction mới
@@ -100,7 +134,34 @@ public class ScheduledTransactionController {
     }
 
     /**
-     * Xóa scheduled transaction
+     * Hủy scheduled transaction (đổi status thành CANCELLED, không xóa)
+     */
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelScheduledTransaction(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long scheduleId
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            ScheduledTransactionResponse scheduled = scheduledTransactionService
+                    .cancelScheduledTransaction(user.getUserId(), scheduleId);
+            
+            res.put("message", "Đã hủy lịch giao dịch");
+            res.put("scheduledTransaction", scheduled);
+            return ResponseEntity.ok(res);
+            
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
+     * Xóa scheduled transaction (xóa hoàn toàn khỏi database)
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteScheduledTransaction(

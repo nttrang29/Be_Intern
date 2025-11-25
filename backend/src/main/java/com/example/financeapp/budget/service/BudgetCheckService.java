@@ -5,6 +5,7 @@ import com.example.financeapp.budget.entity.Budget;
 import com.example.financeapp.transaction.entity.Transaction;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * Service để kiểm tra và đánh dấu giao dịch vượt hạn mức ngân sách
@@ -24,6 +25,23 @@ public interface BudgetCheckService {
      * @return BudgetWarningResponse chứa thông tin cảnh báo
      */
     BudgetWarningResponse checkBudgetWarning(Transaction transaction);
+    
+    /**
+     * Preview cảnh báo ngân sách TRƯỚC KHI tạo transaction (cho frontend hiển thị modal)
+     * @param userId ID người dùng
+     * @param categoryId ID danh mục
+     * @param walletId ID ví
+     * @param amount Số tiền giao dịch
+     * @param transactionDate Ngày giao dịch
+     * @return BudgetWarningResponse chứa thông tin cảnh báo chi tiết
+     */
+    BudgetWarningResponse previewBudgetWarning(
+            Long userId,
+            Long categoryId,
+            Long walletId,
+            BigDecimal amount,
+            LocalDate transactionDate
+    );
     
     /**
      * Tính số tiền vượt hạn mức (nếu có)

@@ -15,5 +15,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByResetToken(String resetToken);
 
     List<User> findByEnabledTrueAndDeletedFalse();
+    
+    /**
+     * Tìm user đã bật auto backup
+     */
+    List<User> findByEnabledTrueAndDeletedFalseAndAutoBackupEnabledTrue();
 }
 

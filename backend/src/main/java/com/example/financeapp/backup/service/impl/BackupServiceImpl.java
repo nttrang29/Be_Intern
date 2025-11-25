@@ -55,7 +55,7 @@ public class BackupServiceImpl implements BackupService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
         if (!cloudStorageService.isEnabled()) {
-            throw new RuntimeException("Chức năng backup cloud đang tắt. Vui lòng cấu hình cloud.aws.*");
+            throw new RuntimeException("Chức năng sao lưu cloud chưa được cấu hình. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
         }
 
         BackupHistory history = new BackupHistory();

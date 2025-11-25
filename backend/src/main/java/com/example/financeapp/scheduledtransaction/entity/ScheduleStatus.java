@@ -6,6 +6,7 @@ package com.example.financeapp.scheduledtransaction.entity;
 public enum ScheduleStatus {
     PENDING,   // Đang chờ đến thời gian thực hiện
     COMPLETED, // Đã thực hiện thành công
-    FAILED     // Thất bại (thường do không đủ tiền)
+    FAILED,    // Thất bại (thường do không đủ tiền)
+    CANCELLED  // Đã hủy bởi user (không xóa, chỉ đổi status)
 }
 

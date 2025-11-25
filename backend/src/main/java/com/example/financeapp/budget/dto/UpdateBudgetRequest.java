@@ -4,10 +4,7 @@ import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public class CreateBudgetRequest {
-
-    @NotNull(message = "Vui lòng chọn danh mục")
-    private Long categoryId;
+public class UpdateBudgetRequest {
 
     private Long walletId; // null = áp dụng cho tất cả ví
 
@@ -26,12 +23,9 @@ public class CreateBudgetRequest {
 
     @Min(value = 0, message = "Ngưỡng cảnh báo phải ≥ 0%")
     @Max(value = 100, message = "Ngưỡng cảnh báo phải ≤ 100%")
-    private Double warningThreshold = 80.0; // Ngưỡng cảnh báo (%), mặc định 80%
+    private Double warningThreshold; // Ngưỡng cảnh báo (%)
 
     // Getters & Setters
-    public Long getCategoryId() { return categoryId; }
-    public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
-
     public Long getWalletId() { return walletId; }
     public void setWalletId(Long walletId) { this.walletId = walletId; }
 
@@ -50,3 +44,4 @@ public class CreateBudgetRequest {
     public Double getWarningThreshold() { return warningThreshold; }
     public void setWarningThreshold(Double warningThreshold) { this.warningThreshold = warningThreshold; }
 }
+
