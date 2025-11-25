@@ -58,7 +58,7 @@ public class EmailService {
         String subject = "[FinanceApp] Mã xác thực đăng ký tài khoản";
         String content = "Xin chào,\n\n"
                 + "Mã OTP đăng ký tài khoản của bạn là: " + otp + "\n"
-                + "Mã có hiệu lực trong 5 phút.\n\n"
+                + "Mã có hiệu lực trong 1 phút.\n\n"
                 + "Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.\n\n"
                 + "Trân trọng,\nĐội ngũ FinanceApp";
         send(email, subject, content);
@@ -69,7 +69,7 @@ public class EmailService {
         String subject = "[FinanceApp] Mã xác thực đặt lại mật khẩu";
         String content = "Xin chào,\n\n"
                 + "Mã OTP đặt lại mật khẩu của bạn là: " + otp + "\n"
-                + "Mã có hiệu lực trong 5 phút.\n\n"
+                + "Mã có hiệu lực trong 1 phút.\n\n"
                 + "Nếu bạn không thực hiện yêu cầu này, vui lòng đổi mật khẩu hoặc liên hệ hỗ trợ.\n\n"
                 + "Trân trọng,\nĐội ngũ FinanceApp";
         send(email, subject, content);

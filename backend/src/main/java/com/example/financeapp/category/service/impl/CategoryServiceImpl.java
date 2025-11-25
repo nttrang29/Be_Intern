@@ -30,17 +30,37 @@ public class CategoryServiceImpl implements CategoryService {
     // TẠO DANH MỤC
     // ==============================
     @Override
-    public Category createCategory(User user, String name, String description, Long transactionTypeId) {
+    public Category createCategory(User user, String name, String description, Long transactionTypeId, boolean isSystem) {
         TransactionType type = transactionTypeRepository.findById(transactionTypeId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy loại giao dịch"));
 
-        boolean duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUser(name, type, user)
-                || categoryRepository.existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrue(name, type);
-        if (duplicate) {
-            throw new RuntimeException("Danh mục '" + name + "' đã tồn tại trong loại giao dịch này");
+        User categoryOwner;
+
+        // --- LOGIC QUAN TRỌNG: FIX CỨNG THEO ROLE ---
+        if (user.getRole() == com.example.financeapp.security.Role.ADMIN) {
+            isSystem = true;       // Admin -> Mặc định là hệ thống
+            categoryOwner = null;  // Hệ thống -> Không thuộc về user cụ thể (để hiện cho tất cả)
+        } else {
+            isSystem = false;      // User thường -> Mặc định là cá nhân
+            categoryOwner = user;  // Gán cho user đó
+        }
+        // ---------------------------------------------
+
+        // Kiểm tra trùng tên
+        boolean duplicate;
+        if (isSystem) {
+            // Check trong danh sách hệ thống
+            duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrue(name, type);
+        } else {
+            // Check trong danh sách cá nhân
+            duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUser(name, type, categoryOwner);
         }
 
-        Category category = new Category(name, type, description, user, false);
+        if (duplicate) {
+            throw new RuntimeException("Danh mục '" + name + "' đã tồn tại");
+        }
+
+        Category category = new Category(name, type, description, categoryOwner, isSystem);
         return categoryRepository.save(category);
     }
 
@@ -49,34 +69,41 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
 
-        if (category.isSystem()) {
-            throw new RuntimeException("Không thể sửa danh mục hệ thống");
-        }
-        if (category.getUser() == null || !category.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new RuntimeException("Bạn không có quyền sửa danh mục này");
+        boolean isAdmin = currentUser.getRole() == com.example.financeapp.security.Role.ADMIN;
+        boolean isSystemCat = category.isSystem();
+        boolean isOwner = category.getUser() != null && category.getUser().getUserId().equals(currentUser.getUserId());
+
+        // Logic phân quyền sửa
+        if (isSystemCat) {
+            if (!isAdmin) {
+                throw new RuntimeException("Chỉ Admin mới được sửa danh mục hệ thống");
+            }
+        } else {
+            if (!isOwner) {
+                throw new RuntimeException("Bạn không có quyền sửa danh mục này");
+            }
         }
 
+        // Logic cập nhật và check trùng tên khi sửa
         if (name != null && !name.isBlank() && !name.equals(category.getCategoryName())) {
-            boolean duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUser(name, category.getTransactionType(), currentUser)
-                    || categoryRepository.existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrue(name, category.getTransactionType());
-            if (duplicate) {
-                throw new RuntimeException("Danh mục '" + name + "' đã tồn tại trong loại giao dịch này");
+            boolean duplicate;
+            if (isSystemCat) {
+                duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrue(name, category.getTransactionType());
+            } else {
+                duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUser(name, category.getTransactionType(), currentUser);
             }
+            if (duplicate) throw new RuntimeException("Tên danh mục đã tồn tại");
             category.setCategoryName(name);
         }
 
-        // Cho phép set description về null nếu description rỗng hoặc chỉ có khoảng trắng
         if (description != null && !description.isBlank()) {
             category.setDescription(description);
         } else if (description != null && description.isBlank()) {
-            // Nếu description là chuỗi rỗng thì set về null
             category.setDescription(null);
         }
-        // Nếu description là null, giữ nguyên giá trị hiện tại (không thay đổi)
 
         return categoryRepository.save(category);
     }
-
     // ==============================
     // XÓA DANH MỤC
     // ==============================
@@ -85,18 +112,24 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
 
-        if (category.isSystem()) {
-            throw new RuntimeException("Không thể xóa danh mục hệ thống");
+        boolean isAdmin = currentUser.getRole() == com.example.financeapp.security.Role.ADMIN;
+        boolean isSystemCat = category.isSystem();
+        boolean isOwner = category.getUser() != null && category.getUser().getUserId().equals(currentUser.getUserId());
+
+        // Logic phân quyền xóa
+        if (isSystemCat) {
+            if (!isAdmin) {
+                throw new RuntimeException("Chỉ Admin mới được xóa danh mục hệ thống");
+            }
+        } else {
+            if (!isOwner) {
+                throw new RuntimeException("Bạn không có quyền xóa danh mục này");
+            }
         }
 
-        if (category.getUser() == null || !category.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new RuntimeException("Bạn không có quyền xóa danh mục này");
-        }
-
-        // Kiểm tra xem danh mục có đang được sử dụng trong giao dịch không
         boolean hasTransactions = transactionRepository.existsByCategory_CategoryId(id);
         if (hasTransactions) {
-            throw new RuntimeException("Danh mục đã có giao dịch");
+            throw new RuntimeException("Danh mục đã có giao dịch, không thể xóa");
         }
 
         categoryRepository.delete(category);

@@ -1,5 +1,6 @@
 package com.example.financeapp.category.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 
 public class CreateCategoryRequest {
@@ -13,6 +14,9 @@ public class CreateCategoryRequest {
     @Size(max = 255, message = "Mô tả không quá 255 ký tự")
     private String description;
 
+    @JsonProperty("isSystem")
+    private boolean isSystem;
+
     // Getters & Setters
     public String getCategoryName() { return categoryName; }
     public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
@@ -22,4 +26,7 @@ public class CreateCategoryRequest {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public boolean getIsSystem() { return isSystem; }
+    public void setIsSystem(boolean system) { isSystem = system; }
 }
