@@ -8,7 +8,7 @@ import com.example.financeapp.auth.service.AuthService;
 import com.example.financeapp.auth.service.GoogleOAuthService;
 import com.example.financeapp.auth.service.GoogleUserInfo;
 import com.example.financeapp.auth.util.OtpUtil;
-import com.example.financeapp.common.service.EmailService;
+import com.example.financeapp.email.EmailService;
 import com.example.financeapp.config.JwtUtil;
 import com.example.financeapp.exception.ApiErrorCode;
 import com.example.financeapp.exception.ApiException;
