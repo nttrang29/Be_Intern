@@ -32,8 +32,7 @@ public class CategoryController {
                 user,
                 request.getCategoryName(),
                 request.getDescription(),
-                request.getTransactionTypeId(),
-                request.getIsSystem()
+                request.getTransactionTypeId()
         );
     }
 

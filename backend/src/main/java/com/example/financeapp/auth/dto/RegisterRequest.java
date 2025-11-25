@@ -2,9 +2,6 @@ package com.example.financeapp.auth.dto;
 
 import jakarta.validation.constraints.*;
 
-import lombok.Data;
-
-@Data
 public class RegisterRequest {
 
     @Email(message = "Email không hợp lệ")
@@ -14,4 +11,21 @@ public class RegisterRequest {
     @NotBlank(message = "Họ tên không được để trống")
     @Size(min = 2, max = 100, message = "Họ tên phải từ 2 - 100 ký tự")
     private String fullName;
+
+    // Getters & Setters
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
 }

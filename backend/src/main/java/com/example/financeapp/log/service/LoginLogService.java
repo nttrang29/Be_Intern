@@ -4,6 +4,7 @@ import com.example.financeapp.log.entity.LoginLog;
 import com.example.financeapp.log.repository.LoginLogRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -19,11 +20,11 @@ public class LoginLogService {
      * Lưu 1 bản ghi login log mới
      */
     public void save(Long userId, String ipAddress, String userAgent) {
-        LoginLog log = LoginLog.builder()
-                .userId(userId)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .build();
+        LoginLog log = new LoginLog();
+        log.setUserId(userId);
+        log.setIpAddress(ipAddress);
+        log.setUserAgent(userAgent);
+        log.setLoginTime(Instant.now());
 
         loginLogRepository.save(log);
     }
@@ -36,10 +37,10 @@ public class LoginLogService {
     }
 
     /**
-     * Lấy N lần đăng nhập gần nhất của user (ví dụ dùng cho giao diện)
+     * Lấy N lần đăng nhập gần nhất của user
      */
     public List<LoginLog> getRecentLogsByUser(Long userId, int limit) {
-        // Đơn giản dùng top10 trước, nếu muốn linh hoạt hơn có thể custom query
         return loginLogRepository.findTop10ByUserIdOrderByLoginTimeDesc(userId);
     }
 }
+
