@@ -36,23 +36,29 @@ public class CategoryServiceImpl implements CategoryService {
 
         User categoryOwner;
 
-        // --- LOGIC QUAN TRỌNG: FIX CỨNG THEO ROLE ---
-        if (user.getRole() == com.example.financeapp.security.Role.ADMIN) {
-            isSystem = true;       // Admin -> Mặc định là hệ thống
-            categoryOwner = null;  // Hệ thống -> Không thuộc về user cụ thể (để hiện cho tất cả)
-        } else {
-            isSystem = false;      // User thường -> Mặc định là cá nhân
-            categoryOwner = user;  // Gán cho user đó
-        }
-        // ---------------------------------------------
+        // --- LOGIC MỚI: Cho phép Admin chọn ---
+        boolean isAdmin = user.getRole() == com.example.financeapp.security.Role.ADMIN;
 
-        // Kiểm tra trùng tên
+        if (isSystem) {
+            // Nếu muốn tạo danh mục hệ thống
+            if (isAdmin) {
+                categoryOwner = null; // System Category không thuộc về user cụ thể
+            } else {
+                // User thường không được phép tạo System -> Ép về cá nhân
+                isSystem = false;
+                categoryOwner = user;
+            }
+        } else {
+            // Nếu muốn tạo danh mục cá nhân (cho cả Admin và User thường)
+            categoryOwner = user;
+        }
+        // --------------------------------------
+
+        // Kiểm tra trùng tên (Logic cũ giữ nguyên nhưng thay categoryOwner cho đúng)
         boolean duplicate;
         if (isSystem) {
-            // Check trong danh sách hệ thống
             duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrue(name, type);
         } else {
-            // Check trong danh sách cá nhân
             duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUser(name, type, categoryOwner);
         }
 
