@@ -9,8 +9,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
+
+    /**
+     * Lấy danh sách budgets của user, sắp xếp theo thời gian tạo mới nhất
+     */
+    List<Budget> findByUser_UserIdOrderByCreatedAtDesc(Long userId);
 
     // ← METHOD MỚI: kiểm tra trùng chính xác 100%
     @Query("""
@@ -54,5 +60,32 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
             @Param("walletId") Long walletId,
             @Param("newStartDate") LocalDate newStartDate,
             @Param("newEndDate") LocalDate newEndDate
+    );
+
+    /**
+     * Tìm các budget áp dụng cho một giao dịch
+     * - Cùng user, category
+     * - Wallet khớp hoặc budget áp dụng cho tất cả ví (wallet = null)
+     * - Transaction date nằm trong khoảng startDate và endDate
+     */
+    @Query("""
+        SELECT b
+        FROM Budget b
+        WHERE b.user.userId = :userId
+          AND b.category.categoryId = :categoryId
+          AND (
+                b.wallet IS NULL
+             OR b.wallet.walletId = :walletId
+              )
+          AND b.startDate <= :transactionDate
+          AND b.endDate >= :transactionDate
+          AND b.status = 'ACTIVE'
+        ORDER BY b.createdAt DESC
+        """)
+    List<Budget> findApplicableBudgets(
+            @Param("userId") Long userId,
+            @Param("categoryId") Long categoryId,
+            @Param("walletId") Long walletId,
+            @Param("transactionDate") LocalDate transactionDate
     );
 }

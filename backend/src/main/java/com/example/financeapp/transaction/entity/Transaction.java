@@ -58,6 +58,17 @@ public class Transaction {
     @Column(name = "merge_date")
     private LocalDateTime mergeDate; // Ngày gộp ví (để biết transaction từ merge)
 
+    // ============ FIELDS CHO BUDGET EXCEEDED ============
+    
+    @Column(name = "is_exceeded_budget")
+    private Boolean isExceededBudget = false; // Đánh dấu giao dịch vượt hạn mức ngân sách
+    
+    @Column(name = "exceeded_budget_amount", precision = 20, scale = 8)
+    private BigDecimal exceededBudgetAmount = BigDecimal.ZERO; // Số tiền vượt hạn mức (nếu có)
+    
+    @Column(name = "exceeded_budget_id")
+    private Long exceededBudgetId; // ID của budget bị vượt (nếu có)
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -114,4 +125,13 @@ public class Transaction {
 
     public LocalDateTime getMergeDate() { return mergeDate; }
     public void setMergeDate(LocalDateTime mergeDate) { this.mergeDate = mergeDate; }
+
+    public Boolean getIsExceededBudget() { return isExceededBudget; }
+    public void setIsExceededBudget(Boolean isExceededBudget) { this.isExceededBudget = isExceededBudget; }
+
+    public BigDecimal getExceededBudgetAmount() { return exceededBudgetAmount; }
+    public void setExceededBudgetAmount(BigDecimal exceededBudgetAmount) { this.exceededBudgetAmount = exceededBudgetAmount; }
+
+    public Long getExceededBudgetId() { return exceededBudgetId; }
+    public void setExceededBudgetId(Long exceededBudgetId) { this.exceededBudgetId = exceededBudgetId; }
 }

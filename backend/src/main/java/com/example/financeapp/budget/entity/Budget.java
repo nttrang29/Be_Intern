@@ -41,6 +41,10 @@ public class Budget {
     @Column(name = "note", length = 255)
     private String note;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    private BudgetStatus status = BudgetStatus.ACTIVE; // Mặc định là ACTIVE
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -76,6 +80,9 @@ public class Budget {
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
+
+    public BudgetStatus getStatus() { return status; }
+    public void setStatus(BudgetStatus status) { this.status = status; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

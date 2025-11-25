@@ -1,5 +1,6 @@
 package com.example.financeapp;
 
+import com.example.financeapp.cloud.storage.CloudStorageProperties;
 import com.example.financeapp.security.Role;
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.user.repository.UserRepository;
@@ -8,11 +9,15 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.TimeZone;
 
 @SpringBootApplication
+@EnableScheduling
+@EnableConfigurationProperties(CloudStorageProperties.class)
 public class FinanceAppApplication {
 
     @PostConstruct

@@ -1,0 +1,603 @@
+package com.example.financeapp.fund.service.impl;
+
+import com.example.financeapp.fund.dto.CreateFundRequest;
+import com.example.financeapp.fund.dto.FundMemberResponse;
+import com.example.financeapp.fund.dto.FundResponse;
+import com.example.financeapp.fund.dto.UpdateFundRequest;
+import com.example.financeapp.fund.entity.Fund;
+import com.example.financeapp.fund.entity.FundMember;
+import com.example.financeapp.fund.entity.FundMemberRole;
+import com.example.financeapp.fund.entity.FundStatus;
+import com.example.financeapp.fund.entity.FundType;
+import com.example.financeapp.fund.repository.FundMemberRepository;
+import com.example.financeapp.fund.repository.FundRepository;
+import com.example.financeapp.fund.service.FundService;
+import com.example.financeapp.user.entity.User;
+import com.example.financeapp.user.repository.UserRepository;
+import com.example.financeapp.wallet.entity.Wallet;
+import com.example.financeapp.wallet.repository.WalletRepository;
+import com.example.financeapp.wallet.service.WalletService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class FundServiceImpl implements FundService {
+
+    @Autowired
+    private FundRepository fundRepository;
+    
+    @Autowired
+    private FundMemberRepository fundMemberRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private WalletRepository walletRepository;
+    
+    @Autowired
+    private WalletService walletService;
+
+    @Override
+    @Transactional
+    public FundResponse createFund(Long userId, CreateFundRequest request) {
+        // 1. Kiểm tra user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        // 2. Kiểm tra và lấy ví đích
+        Wallet targetWallet = walletRepository.findById(request.getTargetWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
+
+        if (!walletService.hasAccess(targetWallet.getWalletId(), userId)) {
+            throw new RuntimeException("Bạn không có quyền truy cập ví này");
+        }
+
+        // 3. Kiểm tra ví đã được sử dụng cho quỹ hoặc ngân sách chưa
+        if (isWalletUsed(targetWallet.getWalletId())) {
+            throw new RuntimeException("Ví đã được sử dụng cho quỹ hoặc ngân sách khác");
+        }
+
+        // 4. Validate theo loại quỹ và kỳ hạn
+        validateFundRequest(request, targetWallet);
+
+        // 5. Tạo quỹ
+        Fund fund = new Fund();
+        fund.setOwner(user);
+        fund.setTargetWallet(targetWallet);
+        fund.setFundType(request.getFundType());
+        fund.setFundName(request.getFundName());
+        fund.setHasDeadline(request.getHasDeadline());
+        fund.setStatus(FundStatus.ACTIVE);
+        
+        // Set các trường theo hasDeadline
+        if (request.getHasDeadline()) {
+            fund.setTargetAmount(request.getTargetAmount());
+            fund.setFrequency(request.getFrequency());
+            fund.setAmountPerPeriod(request.getAmountPerPeriod());
+            fund.setStartDate(request.getStartDate());
+            fund.setEndDate(request.getEndDate());
+        } else {
+            // Không kỳ hạn: các trường này tùy chọn
+            fund.setFrequency(request.getFrequency());
+            fund.setAmountPerPeriod(request.getAmountPerPeriod());
+            fund.setStartDate(request.getStartDate());
+        }
+        
+        fund.setCurrentAmount(targetWallet.getBalance()); // Số dư hiện tại của ví
+        fund.setNote(request.getNote());
+
+        // 6. Set reminder
+        if (request.getReminderEnabled() != null && request.getReminderEnabled()) {
+            fund.setReminderEnabled(true);
+            fund.setReminderType(request.getReminderType());
+            fund.setReminderTime(request.getReminderTime());
+            fund.setReminderDayOfWeek(request.getReminderDayOfWeek());
+            fund.setReminderDayOfMonth(request.getReminderDayOfMonth());
+            fund.setReminderMonth(request.getReminderMonth());
+            fund.setReminderDay(request.getReminderDay());
+        }
+
+        // 7. Set auto deposit
+        if (request.getAutoDepositEnabled() != null && request.getAutoDepositEnabled()) {
+            fund.setAutoDepositEnabled(true);
+            fund.setAutoDepositType(request.getAutoDepositType());
+            
+            if (request.getAutoDepositType() == com.example.financeapp.fund.entity.AutoDepositType.CUSTOM_SCHEDULE) {
+                Wallet sourceWallet = walletRepository.findById(request.getSourceWalletId())
+                        .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+                
+                if (sourceWallet.getWalletId().equals(targetWallet.getWalletId())) {
+                    throw new RuntimeException("Ví nguồn không được trùng với ví quỹ");
+                }
+                
+                if (isWalletUsed(sourceWallet.getWalletId())) {
+                    throw new RuntimeException("Ví nguồn không hợp lệ vì đang là ví quỹ hoặc ví ngân sách");
+                }
+                
+                fund.setSourceWallet(sourceWallet);
+                fund.setAutoDepositScheduleType(request.getAutoDepositScheduleType());
+                fund.setAutoDepositTime(request.getAutoDepositTime());
+                fund.setAutoDepositDayOfWeek(request.getAutoDepositDayOfWeek());
+                fund.setAutoDepositDayOfMonth(request.getAutoDepositDayOfMonth());
+                fund.setAutoDepositMonth(request.getAutoDepositMonth());
+                fund.setAutoDepositDay(request.getAutoDepositDay());
+                fund.setAutoDepositAmount(request.getAutoDepositAmount());
+            } else {
+                // FOLLOW_REMINDER
+                if (!fund.getReminderEnabled()) {
+                    throw new RuntimeException("Bạn phải bật nhắc nhở nếu dùng chế độ nạp theo lịch nhắc nhở");
+                }
+                Wallet sourceWallet = walletRepository.findById(request.getSourceWalletId())
+                        .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+                
+                if (sourceWallet.getWalletId().equals(targetWallet.getWalletId())) {
+                    throw new RuntimeException("Ví nguồn không được trùng với ví quỹ");
+                }
+                
+                if (isWalletUsed(sourceWallet.getWalletId())) {
+                    throw new RuntimeException("Ví nguồn không hợp lệ vì đang là ví quỹ hoặc ví ngân sách");
+                }
+                
+                fund.setSourceWallet(sourceWallet);
+            }
+        }
+
+        fund = fundRepository.save(fund);
+
+        // 8. Tạo thành viên cho quỹ nhóm
+        if (request.getFundType() == FundType.GROUP) {
+            if (request.getMembers() == null || request.getMembers().isEmpty()) {
+                throw new RuntimeException("Quỹ nhóm phải có ít nhất 01 thành viên ngoài chủ quỹ");
+            }
+
+            // Tạo chủ quỹ
+            FundMember ownerMember = new FundMember();
+            ownerMember.setFund(fund);
+            ownerMember.setUser(user);
+            ownerMember.setRole(FundMemberRole.OWNER);
+            fundMemberRepository.save(ownerMember);
+
+            // Tạo các thành viên khác
+            for (CreateFundRequest.FundMemberRequest memberReq : request.getMembers()) {
+                User memberUser = userRepository.findByEmail(memberReq.getEmail())
+                        .orElseThrow(() -> new RuntimeException(
+                                "Tài khoản không tồn tại. Vui lòng mời người dùng đăng ký trước khi tham gia quỹ: " + memberReq.getEmail()));
+
+                if (memberUser.getUserId().equals(userId)) {
+                    throw new RuntimeException("Email thành viên bị trùng với chủ quỹ");
+                }
+
+                // Kiểm tra trùng email
+                if (fundMemberRepository.existsByFund_FundIdAndUser_UserId(fund.getFundId(), memberUser.getUserId())) {
+                    throw new RuntimeException("Email thành viên bị trùng: " + memberReq.getEmail());
+                }
+
+                FundMember member = new FundMember();
+                member.setFund(fund);
+                member.setUser(memberUser);
+                member.setRole("CONTRIBUTOR".equals(memberReq.getRole()) ? FundMemberRole.CONTRIBUTOR : FundMemberRole.OWNER);
+                fundMemberRepository.save(member);
+            }
+        }
+
+        return buildFundResponse(fund);
+    }
+
+    @Override
+    public List<FundResponse> getAllFunds(Long userId) {
+        List<Fund> funds = fundRepository.findByUserInvolved(userId);
+        return funds.stream()
+                .map(this::buildFundResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<FundResponse> getPersonalFunds(Long userId, Boolean hasDeadline) {
+        List<Fund> funds = fundRepository.findByOwner_UserIdAndFundTypeOrderByCreatedAtDesc(userId, FundType.PERSONAL);
+        
+        if (hasDeadline != null) {
+            funds = funds.stream()
+                    .filter(f -> f.getHasDeadline().equals(hasDeadline))
+                    .collect(Collectors.toList());
+        }
+        
+        return funds.stream()
+                .map(this::buildFundResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<FundResponse> getGroupFunds(Long userId, Boolean hasDeadline) {
+        List<Fund> funds = fundRepository.findByOwner_UserIdAndFundTypeAndStatusOrderByCreatedAtDesc(
+                userId, FundType.GROUP, FundStatus.ACTIVE);
+        
+        if (hasDeadline != null) {
+            funds = funds.stream()
+                    .filter(f -> f.getHasDeadline().equals(hasDeadline))
+                    .collect(Collectors.toList());
+        }
+        
+        return funds.stream()
+                .map(this::buildFundResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<FundResponse> getParticipatedFunds(Long userId) {
+        List<Fund> funds = fundMemberRepository.findGroupFundsByMember(userId);
+        return funds.stream()
+                .map(this::buildFundResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public FundResponse getFundById(Long userId, Long fundId) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+
+        // Kiểm tra quyền: user phải là chủ quỹ hoặc thành viên
+        if (!fund.getOwner().getUserId().equals(userId) && 
+            !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
+            throw new RuntimeException("Bạn không có quyền xem quỹ này");
+        }
+
+        return buildFundResponse(fund);
+    }
+
+    @Override
+    @Transactional
+    public FundResponse updateFund(Long userId, Long fundId, UpdateFundRequest request) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+
+        // Kiểm tra quyền: chỉ chủ quỹ mới được sửa
+        if (!fund.getOwner().getUserId().equals(userId)) {
+            throw new RuntimeException("Chỉ chủ quỹ mới được sửa thông tin quỹ");
+        }
+
+        if (fund.getStatus() != FundStatus.ACTIVE) {
+            throw new RuntimeException("Không thể sửa quỹ đã đóng hoặc đã hoàn thành");
+        }
+
+        // Cập nhật các trường được phép sửa
+        if (request.getFundName() != null) {
+            fund.setFundName(request.getFundName());
+        }
+        if (request.getFrequency() != null) {
+            fund.setFrequency(request.getFrequency());
+        }
+        if (request.getAmountPerPeriod() != null) {
+            fund.setAmountPerPeriod(request.getAmountPerPeriod());
+        }
+        if (request.getStartDate() != null) {
+            fund.setStartDate(request.getStartDate());
+        }
+        if (request.getEndDate() != null && fund.getHasDeadline()) {
+            fund.setEndDate(request.getEndDate());
+        }
+        if (request.getNote() != null) {
+            fund.setNote(request.getNote());
+        }
+
+        // Cập nhật reminder
+        if (request.getReminderEnabled() != null) {
+            fund.setReminderEnabled(request.getReminderEnabled());
+            if (request.getReminderEnabled()) {
+                fund.setReminderType(request.getReminderType());
+                fund.setReminderTime(request.getReminderTime());
+                fund.setReminderDayOfWeek(request.getReminderDayOfWeek());
+                fund.setReminderDayOfMonth(request.getReminderDayOfMonth());
+                fund.setReminderMonth(request.getReminderMonth());
+                fund.setReminderDay(request.getReminderDay());
+            }
+        }
+
+        // Cập nhật auto deposit
+        if (request.getAutoDepositEnabled() != null) {
+            fund.setAutoDepositEnabled(request.getAutoDepositEnabled());
+            if (request.getAutoDepositEnabled()) {
+                fund.setAutoDepositType(request.getAutoDepositType());
+                if (request.getSourceWalletId() != null) {
+                    Wallet sourceWallet = walletRepository.findById(request.getSourceWalletId())
+                            .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+                    
+                    if (sourceWallet.getWalletId().equals(fund.getTargetWallet().getWalletId())) {
+                        throw new RuntimeException("Ví nguồn không được trùng với ví quỹ");
+                    }
+                    
+                    fund.setSourceWallet(sourceWallet);
+                }
+                if (request.getAutoDepositType() == com.example.financeapp.fund.entity.AutoDepositType.CUSTOM_SCHEDULE) {
+                    fund.setAutoDepositScheduleType(request.getAutoDepositScheduleType());
+                    fund.setAutoDepositTime(request.getAutoDepositTime());
+                    fund.setAutoDepositDayOfWeek(request.getAutoDepositDayOfWeek());
+                    fund.setAutoDepositDayOfMonth(request.getAutoDepositDayOfMonth());
+                    fund.setAutoDepositMonth(request.getAutoDepositMonth());
+                    fund.setAutoDepositDay(request.getAutoDepositDay());
+                    fund.setAutoDepositAmount(request.getAutoDepositAmount());
+                }
+            }
+        }
+
+        // Cập nhật thành viên (cho quỹ nhóm)
+        if (request.getMembers() != null && fund.getFundType() == FundType.GROUP) {
+            // Logic cập nhật thành viên sẽ được xử lý riêng
+            // Ở đây chỉ validate
+        }
+
+        fund = fundRepository.save(fund);
+        return buildFundResponse(fund);
+    }
+
+    @Override
+    @Transactional
+    public void closeFund(Long userId, Long fundId) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+
+        if (!fund.getOwner().getUserId().equals(userId)) {
+            throw new RuntimeException("Chỉ chủ quỹ mới được đóng quỹ");
+        }
+
+        fund.setStatus(FundStatus.CLOSED);
+        fundRepository.save(fund);
+    }
+
+    @Override
+    @Transactional
+    public void deleteFund(Long userId, Long fundId) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+
+        if (!fund.getOwner().getUserId().equals(userId)) {
+            throw new RuntimeException("Chỉ chủ quỹ mới được xóa quỹ");
+        }
+
+        // Xóa thành viên trước
+        fundMemberRepository.deleteByFund_FundId(fundId);
+        
+        // Xóa quỹ
+        fundRepository.delete(fund);
+    }
+
+    @Override
+    @Transactional
+    public FundResponse depositToFund(Long userId, Long fundId, BigDecimal amount) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+
+        // Kiểm tra quyền
+        if (!fund.getOwner().getUserId().equals(userId) && 
+            !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
+            throw new RuntimeException("Bạn không có quyền nạp tiền vào quỹ này");
+        }
+
+        if (fund.getStatus() != FundStatus.ACTIVE) {
+            throw new RuntimeException("Không thể nạp tiền vào quỹ đã đóng");
+        }
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Số tiền nạp phải lớn hơn 0");
+        }
+
+        // Cập nhật số tiền quỹ
+        fund.setCurrentAmount(fund.getCurrentAmount().add(amount));
+        
+        // Cập nhật số dư ví đích
+        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
+        targetWallet.setBalance(targetWallet.getBalance().add(amount));
+        walletRepository.save(targetWallet);
+
+        // Kiểm tra nếu đạt mục tiêu
+        if (fund.getHasDeadline() && fund.getTargetAmount() != null &&
+            fund.getCurrentAmount().compareTo(fund.getTargetAmount()) >= 0) {
+            fund.setStatus(FundStatus.COMPLETED);
+        }
+
+        fund = fundRepository.save(fund);
+        return buildFundResponse(fund);
+    }
+
+    @Override
+    @Transactional
+    public FundResponse withdrawFromFund(Long userId, Long fundId, BigDecimal amount) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+
+        // Chỉ quỹ không kỳ hạn mới được rút
+        if (fund.getHasDeadline()) {
+            throw new RuntimeException("Chỉ quỹ không kỳ hạn mới được rút tiền");
+        }
+
+        // Kiểm tra quyền
+        if (!fund.getOwner().getUserId().equals(userId)) {
+            throw new RuntimeException("Chỉ chủ quỹ mới được rút tiền");
+        }
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Số tiền rút phải lớn hơn 0");
+        }
+
+        if (fund.getCurrentAmount().compareTo(amount) < 0) {
+            throw new RuntimeException("Số tiền trong quỹ không đủ để rút");
+        }
+
+        // Trừ số tiền quỹ
+        fund.setCurrentAmount(fund.getCurrentAmount().subtract(amount));
+        
+        // Trừ số dư ví đích
+        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
+        targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
+        walletRepository.save(targetWallet);
+
+        fund = fundRepository.save(fund);
+        return buildFundResponse(fund);
+    }
+
+    @Override
+    public boolean isWalletUsed(Long walletId) {
+        // Kiểm tra ví có được dùng cho quỹ không
+        if (fundRepository.existsByTargetWallet_WalletId(walletId)) {
+            return true;
+        }
+        
+        // Kiểm tra ví có được dùng cho ngân sách không
+        // (Cần thêm method vào BudgetRepository nếu chưa có)
+        return false; // Tạm thời return false, sẽ bổ sung sau
+    }
+
+    // ============ HELPER METHODS ============
+
+    private void validateFundRequest(CreateFundRequest request, Wallet targetWallet) {
+        LocalDate today = LocalDate.now();
+
+        // Validate quỹ có kỳ hạn
+        if (request.getHasDeadline()) {
+            if (request.getTargetAmount() == null || request.getTargetAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("Số tiền mục tiêu phải lớn hơn 0");
+            }
+
+            if (request.getTargetAmount().compareTo(targetWallet.getBalance()) <= 0) {
+                throw new RuntimeException("Số tiền mục tiêu phải lớn hơn số dư hiện tại trong ví");
+            }
+
+            if (request.getFrequency() == null) {
+                throw new RuntimeException("Vui lòng chọn tần suất gửi quỹ");
+            }
+
+            if (request.getStartDate() == null) {
+                throw new RuntimeException("Vui lòng chọn ngày bắt đầu");
+            }
+
+            if (request.getStartDate().isBefore(today)) {
+                throw new RuntimeException("Ngày bắt đầu phải lớn hơn hoặc bằng ngày hiện tại");
+            }
+
+            if (request.getEndDate() == null) {
+                throw new RuntimeException("Vui lòng chọn ngày kết thúc");
+            }
+
+            if (request.getEndDate().isBefore(request.getStartDate())) {
+                throw new RuntimeException("Ngày kết thúc phải lớn hơn ngày bắt đầu");
+            }
+
+            // Validate khoảng thời gian theo tần suất
+            long daysBetween = ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate());
+            switch (request.getFrequency()) {
+                case DAILY:
+                    if (daysBetween < 1) {
+                        throw new RuntimeException("Khoảng thời gian không đủ cho ít nhất một kỳ gửi");
+                    }
+                    break;
+                case WEEKLY:
+                    if (daysBetween < 7) {
+                        throw new RuntimeException("Khoảng thời gian không đủ cho ít nhất một kỳ gửi");
+                    }
+                    break;
+                case MONTHLY:
+                    if (daysBetween < 30) {
+                        throw new RuntimeException("Khoảng thời gian không đủ cho ít nhất một kỳ gửi");
+                    }
+                    break;
+                case YEARLY:
+                    if (daysBetween < 365) {
+                        throw new RuntimeException("Khoảng thời gian không đủ cho ít nhất một kỳ gửi");
+                    }
+                    break;
+            }
+        } else {
+            // Quỹ không kỳ hạn: startDate có thể null
+            if (request.getStartDate() != null && request.getStartDate().isBefore(today)) {
+                throw new RuntimeException("Ngày bắt đầu phải lớn hơn hoặc bằng ngày hiện tại");
+            }
+        }
+
+        // Validate reminder
+        if (request.getReminderEnabled() != null && request.getReminderEnabled()) {
+            if (request.getReminderType() == null) {
+                throw new RuntimeException("Vui lòng chọn kiểu nhắc nhở");
+            }
+            if (request.getReminderTime() == null) {
+                throw new RuntimeException("Vui lòng chọn giờ nhắc");
+            }
+            // Validate các trường theo reminderType
+            validateReminderFields(request.getReminderType(), request);
+        }
+
+        // Validate auto deposit
+        if (request.getAutoDepositEnabled() != null && request.getAutoDepositEnabled()) {
+            if (request.getAutoDepositType() == null) {
+                throw new RuntimeException("Hãy chọn lịch nạp hoặc tắt tự động nạp tiền");
+            }
+
+            if (request.getAutoDepositType() == com.example.financeapp.fund.entity.AutoDepositType.FOLLOW_REMINDER) {
+                if (request.getReminderEnabled() == null || !request.getReminderEnabled()) {
+                    throw new RuntimeException("Bạn phải bật nhắc nhở nếu dùng chế độ nạp theo lịch nhắc nhở");
+                }
+            }
+
+            if (request.getSourceWalletId() == null) {
+                throw new RuntimeException("Vui lòng chọn ví nguồn");
+            }
+
+            if (request.getAutoDepositType() == com.example.financeapp.fund.entity.AutoDepositType.CUSTOM_SCHEDULE) {
+                if (request.getAutoDepositScheduleType() == null) {
+                    throw new RuntimeException("Vui lòng chọn kiểu lịch tự nạp");
+                }
+                if (request.getAutoDepositAmount() == null || request.getAutoDepositAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new RuntimeException("Số tiền mỗi lần nạp phải lớn hơn 0");
+                }
+            }
+        }
+    }
+
+    private void validateReminderFields(com.example.financeapp.fund.entity.ReminderType reminderType, CreateFundRequest request) {
+        switch (reminderType) {
+            case DAILY:
+                // DAILY chỉ cần time, không cần thêm field nào
+                break;
+            case WEEKLY:
+                if (request.getReminderDayOfWeek() == null) {
+                    throw new RuntimeException("Vui lòng chọn thứ trong tuần cho nhắc nhở");
+                }
+                break;
+            case MONTHLY:
+                if (request.getReminderDayOfMonth() == null) {
+                    throw new RuntimeException("Vui lòng chọn ngày trong tháng cho nhắc nhở");
+                }
+                break;
+            case YEARLY:
+                if (request.getReminderMonth() == null || request.getReminderDay() == null) {
+                    throw new RuntimeException("Vui lòng chọn tháng và ngày cho nhắc nhở");
+                }
+                break;
+        }
+    }
+
+    private FundResponse buildFundResponse(Fund fund) {
+        FundResponse response = FundResponse.fromEntity(fund);
+        
+        // Load thành viên nếu là quỹ nhóm
+        if (fund.getFundType() == FundType.GROUP) {
+            List<FundMember> members = fundMemberRepository.findByFund_FundIdOrderByJoinedAtAsc(fund.getFundId());
+            List<FundMemberResponse> memberResponses = members.stream()
+                    .map(FundMemberResponse::fromEntity)
+                    .collect(Collectors.toList());
+            response.setMembers(memberResponses);
+            response.setMemberCount(members.size());
+        }
+        
+        return response;
+    }
+}
+

@@ -1,11 +1,15 @@
 package com.example.financeapp.budget.service.impl;
 
+import com.example.financeapp.budget.dto.BudgetResponse;
 import com.example.financeapp.budget.dto.CreateBudgetRequest;
 import com.example.financeapp.budget.entity.Budget;
+import com.example.financeapp.budget.entity.BudgetStatus;
 import com.example.financeapp.budget.repository.BudgetRepository;
 import com.example.financeapp.budget.service.BudgetService;
 import com.example.financeapp.category.entity.Category;
 import com.example.financeapp.category.repository.CategoryRepository;
+import com.example.financeapp.transaction.entity.Transaction;
+import com.example.financeapp.transaction.repository.TransactionRepository;
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.user.repository.UserRepository;
 import com.example.financeapp.wallet.entity.Wallet;
@@ -14,6 +18,11 @@ import com.example.financeapp.wallet.service.WalletService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class BudgetServiceImpl implements BudgetService {
@@ -28,6 +37,8 @@ public class BudgetServiceImpl implements BudgetService {
     private WalletRepository walletRepository;
     @Autowired
     private WalletService walletService;
+    @Autowired
+    private TransactionRepository transactionRepository;
 
     @Override
     @Transactional
@@ -93,5 +104,108 @@ public class BudgetServiceImpl implements BudgetService {
                 ? request.getNote().trim() : null);
 
         return budgetRepository.save(budget);
+    }
+
+    @Override
+    public List<BudgetResponse> getAllBudgets(Long userId) {
+        // Lấy tất cả budgets của user
+        List<Budget> budgets = budgetRepository.findByUser_UserIdOrderByCreatedAtDesc(userId);
+
+        // Chuyển đổi sang BudgetResponse với thông tin đã chi
+        return budgets.stream()
+                .map(budget -> {
+                    // Tự động cập nhật status theo thời gian
+                    updateBudgetStatus(budget);
+                    BigDecimal spentAmount = calculateSpentAmount(budget);
+                    return BudgetResponse.fromBudget(budget, spentAmount);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public BudgetResponse getBudgetById(Long userId, Long budgetId) {
+        // Lấy budget
+        Budget budget = budgetRepository.findById(budgetId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ngân sách"));
+
+        // Kiểm tra quyền sở hữu
+        if (!budget.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("Bạn không có quyền xem ngân sách này");
+        }
+
+        // Tự động cập nhật status theo thời gian
+        updateBudgetStatus(budget);
+
+        // Tính số tiền đã chi
+        BigDecimal spentAmount = calculateSpentAmount(budget);
+
+        // Trả về BudgetResponse
+        return BudgetResponse.fromBudget(budget, spentAmount);
+    }
+
+    @Override
+    public List<Transaction> getBudgetTransactions(Long userId, Long budgetId) {
+        // Lấy budget
+        Budget budget = budgetRepository.findById(budgetId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ngân sách"));
+
+        // Kiểm tra quyền sở hữu
+        if (!budget.getUser().getUserId().equals(userId)) {
+            throw new RuntimeException("Bạn không có quyền xem giao dịch của ngân sách này");
+        }
+
+        // Lấy danh sách transactions thuộc budget
+        Long walletId = budget.getWallet() != null ? budget.getWallet().getWalletId() : null;
+        
+        List<Transaction> transactions = transactionRepository.findTransactionsByBudget(
+                budget.getUser().getUserId(),
+                budget.getCategory().getCategoryId(),
+                walletId,
+                budget.getStartDate(),
+                budget.getEndDate()
+        );
+
+        return transactions;
+    }
+
+    /**
+     * Tự động cập nhật status của budget theo thời gian
+     * ACTIVE: trong khoảng thời gian
+     * COMPLETED: đã qua ngày kết thúc
+     */
+    private void updateBudgetStatus(Budget budget) {
+        LocalDate today = LocalDate.now();
+        
+        if (today.isAfter(budget.getEndDate())) {
+            // Đã qua ngày kết thúc -> COMPLETED
+            if (budget.getStatus() != BudgetStatus.COMPLETED) {
+                budget.setStatus(BudgetStatus.COMPLETED);
+                budgetRepository.save(budget);
+            }
+        } else {
+            // Trong khoảng thời gian -> ACTIVE
+            if (budget.getStatus() != BudgetStatus.ACTIVE) {
+                budget.setStatus(BudgetStatus.ACTIVE);
+                budgetRepository.save(budget);
+            }
+        }
+    }
+
+    /**
+     * Tính số tiền đã chi trong budget
+     */
+    private BigDecimal calculateSpentAmount(Budget budget) {
+        Long walletId = budget.getWallet() != null ? budget.getWallet().getWalletId() : null;
+        
+        BigDecimal spentAmount = transactionRepository.calculateTotalSpent(
+                budget.getUser().getUserId(),
+                budget.getCategory().getCategoryId(),
+                walletId,
+                budget.getStartDate(),
+                budget.getEndDate()
+        );
+
+        // Đảm bảo không âm
+        return spentAmount != null ? spentAmount : BigDecimal.ZERO;
     }
 }

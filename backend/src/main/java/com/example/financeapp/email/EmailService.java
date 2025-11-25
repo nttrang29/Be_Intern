@@ -69,5 +69,31 @@ public class EmailService {
                 + "Trân trọng,\nĐội ngũ MyWallet";
         send(email, subject, content);
     }
+
+    // ====== Gửi nhắc nhở ghi giao dịch hàng ngày ======
+    public void sendDailyReminderEmail(String email, String fullName) {
+        String subject = "[MyWallet] Nhắc nhở ghi giao dịch hôm nay";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Bạn chưa ghi giao dịch nào hôm nay. Hãy nhớ ghi chép thu chi để quản lý tài chính tốt hơn nhé!\n\n"
+                + "📝 Ghi chép ngay: Đăng nhập vào ứng dụng và thêm giao dịch mới.\n\n"
+                + "Nếu bạn đã ghi giao dịch, vui lòng bỏ qua email này.\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
+
+    // ====== Gửi thông báo feedback mới cho admin ======
+    public void sendFeedbackNotificationEmail(String adminEmail, String userName, String userEmail, 
+                                             String feedbackType, String subject, String message) {
+        String emailSubject = "[MyWallet] Phản hồi mới từ người dùng: " + subject;
+        String emailContent = "Xin chào Admin,\n\n"
+                + "Có phản hồi mới từ người dùng:\n\n"
+                + "Người gửi: " + userName + " (" + userEmail + ")\n"
+                + "Loại: " + feedbackType + "\n"
+                + "Tiêu đề: " + subject + "\n"
+                + "Nội dung:\n" + message + "\n\n"
+                + "Vui lòng đăng nhập vào hệ thống quản trị để xem và xử lý phản hồi này.\n\n"
+                + "Trân trọng,\nHệ thống MyWallet";
+        send(adminEmail, emailSubject, emailContent);
+    }
 }
 

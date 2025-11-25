@@ -946,6 +946,587 @@ hoặc
 
 ---
 
+## 💬 Feedback APIs
+
+### 1. Gửi phản hồi/báo lỗi
+**POST** `/feedback`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "type": "BUG",
+  "subject": "Lỗi không thể đăng nhập",
+  "message": "Tôi gặp lỗi khi đăng nhập vào ứng dụng. Màn hình hiển thị lỗi 500.",
+  "contactEmail": "user@example.com"
+}
+```
+
+**Request Fields:**
+- `type` (required): Loại phản hồi - `FEEDBACK`, `BUG`, `FEATURE`, `OTHER`
+- `subject` (required): Tiêu đề phản hồi (tối đa 200 ký tự)
+- `message` (required): Nội dung phản hồi (tối đa 5000 ký tự)
+- `contactEmail` (optional): Email để liên hệ lại (nếu khác email user)
+
+**Response:**
+```json
+{
+  "message": "Cảm ơn bạn đã gửi phản hồi! Chúng tôi sẽ xem xét và phản hồi sớm nhất có thể.",
+  "feedback": {
+    "feedbackId": 1,
+    "userId": 1,
+    "userEmail": "user@example.com",
+    "userName": "Nguyễn Văn A",
+    "type": "BUG",
+    "status": "PENDING",
+    "subject": "Lỗi không thể đăng nhập",
+    "message": "Tôi gặp lỗi khi đăng nhập vào ứng dụng...",
+    "contactEmail": "user@example.com",
+    "adminResponse": null,
+    "createdAt": "2024-01-01T10:00:00",
+    "updatedAt": "2024-01-01T10:00:00",
+    "reviewedAt": null,
+    "resolvedAt": null
+  }
+}
+```
+
+**Lưu ý:**
+- Hệ thống tự động gửi email thông báo cho admin khi có feedback mới
+- Status có thể là: `PENDING`, `REVIEWED`, `RESOLVED`, `CLOSED`
+
+---
+
+### 2. Lấy danh sách phản hồi của user
+**GET** `/feedback`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "feedbacks": [
+    {
+      "feedbackId": 1,
+      "userId": 1,
+      "userEmail": "user@example.com",
+      "userName": "Nguyễn Văn A",
+      "type": "BUG",
+      "status": "PENDING",
+      "subject": "Lỗi không thể đăng nhập",
+      "message": "Tôi gặp lỗi khi đăng nhập...",
+      "contactEmail": "user@example.com",
+      "adminResponse": null,
+      "createdAt": "2024-01-01T10:00:00",
+      "updatedAt": "2024-01-01T10:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 3. Lấy chi tiết một phản hồi
+**GET** `/feedback/{id}`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "feedback": {
+    "feedbackId": 1,
+    "userId": 1,
+    "userEmail": "user@example.com",
+    "userName": "Nguyễn Văn A",
+    "type": "BUG",
+    "status": "RESOLVED",
+    "subject": "Lỗi không thể đăng nhập",
+    "message": "Tôi gặp lỗi khi đăng nhập...",
+    "contactEmail": "user@example.com",
+    "adminResponse": "Đã khắc phục lỗi. Vui lòng thử lại.",
+    "createdAt": "2024-01-01T10:00:00",
+    "updatedAt": "2024-01-01T11:00:00",
+    "reviewedAt": "2024-01-01T10:30:00",
+    "resolvedAt": "2024-01-01T11:00:00"
+  }
+}
+```
+
+**Lưu ý:** Chỉ user tạo feedback mới được xem chi tiết
+
+---
+
+## 💰 Fund APIs (Quỹ Tiết Kiệm)
+
+### 1. Tạo quỹ mới
+**POST** `/funds`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body (Quỹ cá nhân có kỳ hạn):**
+```json
+{
+  "fundName": "Quỹ mua xe",
+  "targetWalletId": 1,
+  "fundType": "PERSONAL",
+  "hasDeadline": true,
+  "targetAmount": 50000000.00,
+  "frequency": "MONTHLY",
+  "amountPerPeriod": 5000000.00,
+  "startDate": "2024-02-01",
+  "endDate": "2024-12-31",
+  "reminderEnabled": true,
+  "reminderType": "MONTHLY",
+  "reminderTime": "20:00:00",
+  "reminderDayOfMonth": 1,
+  "autoDepositEnabled": true,
+  "autoDepositType": "CUSTOM_SCHEDULE",
+  "sourceWalletId": 2,
+  "autoDepositScheduleType": "MONTHLY",
+  "autoDepositTime": "20:00:00",
+  "autoDepositDayOfMonth": 1,
+  "autoDepositAmount": 5000000.00,
+  "note": "Tiết kiệm để mua xe"
+}
+```
+
+**Request Body (Quỹ cá nhân không kỳ hạn):**
+```json
+{
+  "fundName": "Quỹ khẩn cấp",
+  "targetWalletId": 1,
+  "fundType": "PERSONAL",
+  "hasDeadline": false,
+  "frequency": "MONTHLY",
+  "amountPerPeriod": 2000000.00,
+  "startDate": "2024-02-01",
+  "reminderEnabled": true,
+  "reminderType": "MONTHLY",
+  "reminderTime": "20:00:00",
+  "reminderDayOfMonth": 1,
+  "note": "Quỹ dự phòng"
+}
+```
+
+**Request Body (Quỹ nhóm có kỳ hạn):**
+```json
+{
+  "fundName": "Quỹ du lịch nhóm",
+  "targetWalletId": 1,
+  "fundType": "GROUP",
+  "hasDeadline": true,
+  "targetAmount": 20000000.00,
+  "frequency": "MONTHLY",
+  "amountPerPeriod": 2000000.00,
+  "startDate": "2024-02-01",
+  "endDate": "2024-12-31",
+  "members": [
+    {
+      "email": "friend1@example.com",
+      "role": "CONTRIBUTOR"
+    },
+    {
+      "email": "friend2@example.com",
+      "role": "CONTRIBUTOR"
+    }
+  ],
+  "reminderEnabled": true,
+  "reminderType": "MONTHLY",
+  "reminderTime": "20:00:00",
+  "reminderDayOfMonth": 1,
+  "note": "Quỹ du lịch cùng bạn bè"
+}
+```
+
+**Request Fields:**
+- `fundName` (required): Tên quỹ
+- `targetWalletId` (required): ID ví đích (ví quỹ)
+- `fundType` (required): `PERSONAL` hoặc `GROUP`
+- `hasDeadline` (required): `true` = có kỳ hạn, `false` = không kỳ hạn
+- `targetAmount` (required nếu hasDeadline=true): Số tiền mục tiêu
+- `frequency` (required nếu hasDeadline=true): `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
+- `amountPerPeriod`: Số tiền gửi mỗi kỳ
+- `startDate` (required nếu hasDeadline=true): Ngày bắt đầu
+- `endDate` (required nếu hasDeadline=true): Ngày kết thúc
+- `reminderEnabled`: Bật/tắt nhắc nhở
+- `reminderType`: `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`
+- `reminderTime`: Giờ nhắc (HH:mm:ss)
+- `reminderDayOfWeek`: Thứ trong tuần (1-7, cho WEEKLY)
+- `reminderDayOfMonth`: Ngày trong tháng (1-31, cho MONTHLY)
+- `reminderMonth`: Tháng (1-12, cho YEARLY)
+- `reminderDay`: Ngày (1-31, cho YEARLY)
+- `autoDepositEnabled`: Bật/tắt tự động nạp tiền
+- `autoDepositType`: `FOLLOW_REMINDER` hoặc `CUSTOM_SCHEDULE`
+- `sourceWalletId`: ID ví nguồn (nếu autoDepositEnabled=true)
+- `autoDepositScheduleType`: Kiểu lịch tự nạp (cho CUSTOM_SCHEDULE)
+- `autoDepositAmount`: Số tiền mỗi lần nạp
+- `members`: Danh sách thành viên (chỉ cho GROUP)
+- `note`: Ghi chú
+
+**Response:**
+```json
+{
+  "message": "Tạo quỹ thành công",
+  "fund": {
+    "fundId": 1,
+    "ownerId": 1,
+    "ownerName": "Nguyễn Văn A",
+    "ownerEmail": "user@example.com",
+    "targetWalletId": 1,
+    "targetWalletName": "Ví quỹ",
+    "currencyCode": "VND",
+    "fundType": "PERSONAL",
+    "status": "ACTIVE",
+    "fundName": "Quỹ mua xe",
+    "hasDeadline": true,
+    "targetAmount": 50000000.00,
+    "currentAmount": 0.00,
+    "progressPercentage": 0.00,
+    "frequency": "MONTHLY",
+    "amountPerPeriod": 5000000.00,
+    "startDate": "2024-02-01",
+    "endDate": "2024-12-31",
+    "note": "Tiết kiệm để mua xe",
+    "reminderEnabled": true,
+    "reminderType": "MONTHLY",
+    "reminderTime": "20:00:00",
+    "reminderDayOfMonth": 1,
+    "autoDepositEnabled": true,
+    "autoDepositType": "CUSTOM_SCHEDULE",
+    "sourceWalletId": 2,
+    "sourceWalletName": "Ví nguồn",
+    "autoDepositScheduleType": "MONTHLY",
+    "autoDepositTime": "20:00:00",
+    "autoDepositDayOfMonth": 1,
+    "autoDepositAmount": 5000000.00,
+    "createdAt": "2024-01-01T10:00:00",
+    "updatedAt": "2024-01-01T10:00:00",
+    "members": null,
+    "memberCount": null
+  }
+}
+```
+
+**Validation Rules:**
+- Ví đích không được đã sử dụng cho quỹ hoặc ngân sách khác
+- Nếu có kỳ hạn: `targetAmount` phải > số dư hiện tại của ví
+- Nếu có kỳ hạn: `endDate` phải > `startDate`
+- Khoảng thời gian phải đủ cho ít nhất một kỳ gửi (theo frequency)
+- Nếu bật auto deposit: phải chọn ví nguồn (không được trùng ví đích)
+- Nếu auto deposit = FOLLOW_REMINDER: phải bật reminder
+- Quỹ nhóm phải có ít nhất 01 thành viên ngoài chủ quỹ
+- Email thành viên không được trùng nhau hoặc trùng email chủ quỹ
+
+---
+
+### 2. Lấy tất cả quỹ của user
+**GET** `/funds`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "funds": [
+    {
+      "fundId": 1,
+      "fundName": "Quỹ mua xe",
+      "fundType": "PERSONAL",
+      "hasDeadline": true,
+      "targetAmount": 50000000.00,
+      "currentAmount": 10000000.00,
+      "progressPercentage": 20.00,
+      "status": "ACTIVE"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 3. Lấy quỹ cá nhân
+**GET** `/funds/personal?hasDeadline=true`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Query Parameters:**
+- `hasDeadline` (optional): `true` = có kỳ hạn, `false` = không kỳ hạn, `null` = tất cả
+
+**Response:**
+```json
+{
+  "funds": [
+    {
+      "fundId": 1,
+      "fundName": "Quỹ mua xe",
+      "hasDeadline": true,
+      "targetAmount": 50000000.00,
+      "currentAmount": 10000000.00,
+      "progressPercentage": 20.00
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 4. Lấy quỹ nhóm
+**GET** `/funds/group?hasDeadline=true`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Query Parameters:**
+- `hasDeadline` (optional): `true` = có kỳ hạn, `false` = không kỳ hạn, `null` = tất cả
+
+**Response:**
+```json
+{
+  "funds": [
+    {
+      "fundId": 2,
+      "fundName": "Quỹ du lịch nhóm",
+      "hasDeadline": true,
+      "targetAmount": 20000000.00,
+      "currentAmount": 5000000.00,
+      "progressPercentage": 25.00,
+      "memberCount": 3
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 5. Lấy quỹ tham gia (không phải chủ quỹ)
+**GET** `/funds/participated`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "funds": [
+    {
+      "fundId": 3,
+      "fundName": "Quỹ nhóm bạn bè",
+      "fundType": "GROUP",
+      "hasDeadline": false,
+      "currentAmount": 3000000.00,
+      "memberCount": 5
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### 6. Lấy chi tiết một quỹ
+**GET** `/funds/{id}`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "fund": {
+    "fundId": 1,
+    "ownerId": 1,
+    "ownerName": "Nguyễn Văn A",
+    "targetWalletId": 1,
+    "targetWalletName": "Ví quỹ",
+    "currencyCode": "VND",
+    "fundType": "PERSONAL",
+    "status": "ACTIVE",
+    "fundName": "Quỹ mua xe",
+    "hasDeadline": true,
+    "targetAmount": 50000000.00,
+    "currentAmount": 10000000.00,
+    "progressPercentage": 20.00,
+    "frequency": "MONTHLY",
+    "amountPerPeriod": 5000000.00,
+    "startDate": "2024-02-01",
+    "endDate": "2024-12-31",
+    "note": "Tiết kiệm để mua xe",
+    "reminderEnabled": true,
+    "reminderType": "MONTHLY",
+    "reminderTime": "20:00:00",
+    "reminderDayOfMonth": 1,
+    "autoDepositEnabled": true,
+    "autoDepositType": "CUSTOM_SCHEDULE",
+    "sourceWalletId": 2,
+    "sourceWalletName": "Ví nguồn",
+    "autoDepositScheduleType": "MONTHLY",
+    "autoDepositTime": "20:00:00",
+    "autoDepositDayOfMonth": 1,
+    "autoDepositAmount": 5000000.00,
+    "createdAt": "2024-01-01T10:00:00",
+    "updatedAt": "2024-01-01T10:00:00",
+    "members": null,
+    "memberCount": null
+  }
+}
+```
+
+**Lưu ý:** Chỉ chủ quỹ hoặc thành viên mới được xem chi tiết
+
+---
+
+### 7. Cập nhật quỹ
+**PUT** `/funds/{id}`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "fundName": "Quỹ mua xe mới",
+  "frequency": "WEEKLY",
+  "amountPerPeriod": 1000000.00,
+  "startDate": "2024-02-01",
+  "endDate": "2024-12-31",
+  "note": "Cập nhật ghi chú",
+  "reminderEnabled": true,
+  "reminderType": "WEEKLY",
+  "reminderTime": "20:00:00",
+  "reminderDayOfWeek": 1,
+  "autoDepositEnabled": false
+}
+```
+
+**Lưu ý:**
+- Chỉ chủ quỹ mới được sửa
+- Chỉ có thể sửa: tên quỹ, tần suất, số tiền mỗi kỳ, ngày bắt đầu/kết thúc, ghi chú, nhắc nhở, tự động nạp
+- Không thể sửa: loại quỹ, loại kỳ hạn, ví đích, số tiền mục tiêu (nếu có kỳ hạn)
+
+**Response:**
+```json
+{
+  "message": "Cập nhật quỹ thành công",
+  "fund": { ... }
+}
+```
+
+---
+
+### 8. Đóng quỹ
+**PUT** `/funds/{id}/close`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "message": "Đóng quỹ thành công"
+}
+```
+
+**Lưu ý:** Chỉ chủ quỹ mới được đóng quỹ. Quỹ đóng sẽ có status = `CLOSED`
+
+---
+
+### 9. Xóa quỹ
+**DELETE** `/funds/{id}`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "message": "Xóa quỹ thành công"
+}
+```
+
+**Lưu ý:** 
+- Chỉ chủ quỹ mới được xóa
+- Xóa quỹ sẽ xóa tất cả thành viên và dữ liệu liên quan
+
+---
+
+### 10. Nạp tiền vào quỹ
+**POST** `/funds/{id}/deposit`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "amount": 5000000.00
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Nạp tiền vào quỹ thành công",
+  "fund": {
+    "fundId": 1,
+    "currentAmount": 15000000.00,
+    "progressPercentage": 30.00,
+    "status": "ACTIVE"
+  }
+}
+```
+
+**Lưu ý:**
+- Chủ quỹ hoặc thành viên (CONTRIBUTOR) có thể nạp tiền
+- Nếu đạt mục tiêu, quỹ sẽ tự động chuyển sang status = `COMPLETED`
+
+---
+
+### 11. Rút tiền từ quỹ
+**POST** `/funds/{id}/withdraw`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "amount": 2000000.00
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Rút tiền từ quỹ thành công",
+  "fund": {
+    "fundId": 1,
+    "currentAmount": 8000000.00,
+    "progressPercentage": 16.00
+  }
+}
+```
+
+**Lưu ý:**
+- Chỉ quỹ không kỳ hạn mới được rút tiền
+- Chỉ chủ quỹ mới được rút tiền
+- Số tiền rút không được vượt quá số tiền hiện có trong quỹ
+
+---
+
+### 12. Kiểm tra ví có đang được sử dụng
+**GET** `/funds/check-wallet/{walletId}`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response:**
+```json
+{
+  "isUsed": false
+}
+```
+
+**Lưu ý:** Kiểm tra ví có đang được sử dụng cho quỹ hoặc ngân sách khác không
+
+---
+
 ## 📝 Lưu ý quan trọng
 
 ### Error Response Format
@@ -978,6 +1559,47 @@ Hỗ trợ các loại tiền tệ: `VND`, `USD`, `EUR`, `JPY`, `GBP`, `CNY`
 ### Wallet Roles
 - `OWNER` - Chủ sở hữu
 - `MEMBER` - Thành viên
+
+### Feedback Types
+- `FEEDBACK` - Phản hồi chung
+- `BUG` - Báo lỗi
+- `FEATURE` - Đề xuất tính năng
+- `OTHER` - Khác
+
+### Feedback Status
+- `PENDING` - Đang chờ xử lý
+- `REVIEWED` - Đã xem
+- `RESOLVED` - Đã xử lý
+- `CLOSED` - Đã đóng
+
+### Fund Types
+- `PERSONAL` - Quỹ cá nhân
+- `GROUP` - Quỹ nhóm
+
+### Fund Status
+- `ACTIVE` - Đang hoạt động
+- `CLOSED` - Đã đóng
+- `COMPLETED` - Đã hoàn thành (đạt mục tiêu)
+
+### Fund Frequency
+- `DAILY` - Hàng ngày
+- `WEEKLY` - Hàng tuần
+- `MONTHLY` - Hàng tháng
+- `YEARLY` - Hàng năm
+
+### Reminder Type
+- `DAILY` - Theo ngày
+- `WEEKLY` - Theo tuần
+- `MONTHLY` - Theo tháng
+- `YEARLY` - Theo năm
+
+### Auto Deposit Type
+- `FOLLOW_REMINDER` - Nạp theo lịch nhắc nhở
+- `CUSTOM_SCHEDULE` - Tự thiết lập lịch nạp
+
+### Fund Member Role
+- `OWNER` - Chủ quỹ
+- `CONTRIBUTOR` - Được sử dụng (có thể nạp tiền)
 
 ---
 

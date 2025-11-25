@@ -1,5 +1,6 @@
 package com.example.financeapp.transaction.service.impl;
 
+import com.example.financeapp.budget.service.BudgetCheckService;
 import com.example.financeapp.category.entity.Category;
 import com.example.financeapp.category.repository.CategoryRepository;
 import com.example.financeapp.transaction.dto.CreateTransactionRequest;
@@ -30,6 +31,7 @@ public class TransactionServiceImpl implements TransactionService {
     @Autowired private TransactionTypeRepository typeRepository;
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private WalletMemberRepository walletMemberRepository;
+    @Autowired private BudgetCheckService budgetCheckService;
 
     private Transaction createTransaction(Long userId, CreateTransactionRequest req, String typeName) {
         // 1. Kiểm tra user tồn tại
@@ -100,6 +102,11 @@ public class TransactionServiceImpl implements TransactionService {
         tx.setNote(req.getNote());
         tx.setImageUrl(req.getImageUrl());
 
+        // 10. Kiểm tra và đánh dấu nếu vượt hạn mức ngân sách (chỉ cho chi tiêu)
+        if ("Chi tiêu".equals(typeName)) {
+            budgetCheckService.checkAndMarkExceededBudget(tx);
+        }
+
         return transactionRepository.save(tx);
     }
 
@@ -141,7 +148,12 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setNote(request.getNote());
         transaction.setImageUrl(request.getImageUrl());
 
-        // 6. Lưu lại (updatedAt sẽ tự động cập nhật nhờ @PreUpdate)
+        // 6. Kiểm tra lại budget nếu là giao dịch chi tiêu (vì có thể đã thay đổi category hoặc amount)
+        if ("Chi tiêu".equals(transaction.getTransactionType().getTypeName())) {
+            budgetCheckService.checkAndMarkExceededBudget(transaction);
+        }
+
+        // 7. Lưu lại (updatedAt sẽ tự động cập nhật nhờ @PreUpdate)
         return transactionRepository.save(transaction);
     }
 
