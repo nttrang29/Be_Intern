@@ -14,11 +14,24 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     List<Category> findByUser_UserId(Long userId);
     List<Category> findByUserIsNullAndIsSystemTrue();
 
+    // Query methods với filter deleted = false
+    List<Category> findByUserAndDeletedFalse(User user);
+    List<Category> findByUserIsNullAndIsSystemTrueAndDeletedFalse();
+
     boolean existsByCategoryNameAndTransactionTypeAndUser(
             String categoryName, TransactionType transactionType, User user
     );
 
     boolean existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrue(
+            String categoryName, TransactionType transactionType
+    );
+
+    // Check trùng tên (chỉ check các category chưa bị xóa)
+    boolean existsByCategoryNameAndTransactionTypeAndUserAndDeletedFalse(
+            String categoryName, TransactionType transactionType, User user
+    );
+
+    boolean existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrueAndDeletedFalse(
             String categoryName, TransactionType transactionType
     );
 }

@@ -77,6 +77,33 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
+    // 4.5️⃣ Xử lý RuntimeException (giữ nguyên thông báo lỗi cụ thể)
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<?> handleRuntimeException(RuntimeException ex) {
+        ex.printStackTrace();
+
+        // Giữ nguyên thông báo lỗi cụ thể (ví dụ: "Danh mục 'xxx' đã tồn tại")
+        String message = ex.getMessage() != null && !ex.getMessage().isBlank()
+                ? ex.getMessage()
+                : "Lỗi xử lý dữ liệu";
+
+        Map<String, Object> body = buildErrorBody(
+                ApiErrorCode.INTERNAL_ERROR,
+                message
+        );
+
+        // Trả về 400 Bad Request cho các lỗi business logic (như duplicate category)
+        // và 500 cho các lỗi hệ thống khác
+        HttpStatus status = message.contains("đã tồn tại") ||
+                message.contains("không được phép") ||
+                message.contains("không tìm thấy") ||
+                message.contains("không có quyền")
+                ? HttpStatus.BAD_REQUEST
+                : HttpStatus.INTERNAL_SERVER_ERROR;
+
+        return ResponseEntity.status(status).body(body);
+    }
+
     // 5️⃣ Lỗi chung chung (fallback)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleOther(Exception ex) {

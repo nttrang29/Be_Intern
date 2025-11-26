@@ -34,6 +34,10 @@ public class Category {
     @Column(name = "is_system", nullable = false)
     private boolean isSystem = false;
 
+    // ===== Soft delete =====
+    @Column(name = "deleted", nullable = false)
+    private boolean deleted = false;
+
     // Constructors
     public Category() {}
 
@@ -64,4 +68,7 @@ public class Category {
     @JsonProperty("isSystem")
     public boolean isSystem() { return isSystem; }
     public void setSystem(boolean system) { isSystem = system; }
+
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
 }
