@@ -23,18 +23,30 @@ public class CategoryController {
     @Autowired private CategoryService categoryService;
 
     @PostMapping("/create")
-    public Category createCategory(
+    public ResponseEntity<?> createCategory(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody CreateCategoryRequest request
     ) {
-        User user = getUserFromDetails(userDetails);
-        return categoryService.createCategory(
-                user,
-                request.getCategoryName(),
-                request.getDescription(),
-                request.getTransactionTypeId(),
-                request.getIsSystem()
-        );
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = getUserFromDetails(userDetails);
+            Category category = categoryService.createCategory(
+                    user,
+                    request.getCategoryName(),
+                    request.getDescription(),
+                    request.getTransactionTypeId(),
+                    request.getIsSystem()
+            );
+            // Trả về Category object khi thành công
+            return ResponseEntity.ok(category);
+        } catch (RuntimeException e) {
+            // Trả về thông báo lỗi cụ thể (ví dụ: "Danh mục 'xxx' đã tồn tại")
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
     }
 
     @PutMapping("/{id}")

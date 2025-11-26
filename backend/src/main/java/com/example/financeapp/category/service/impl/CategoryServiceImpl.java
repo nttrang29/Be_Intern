@@ -55,11 +55,32 @@ public class CategoryServiceImpl implements CategoryService {
         // --------------------------------------
 
         // Kiểm tra trùng tên (chỉ check các category chưa bị xóa)
+        // Sử dụng so sánh chính xác 100% để tránh lỗi do collation của database
+        // Logic:
+        // - Danh mục hệ thống có thể trùng tên với danh mục cá nhân (chỉ check trùng với danh mục hệ thống khác)
+        // - Danh mục cá nhân KHÔNG được trùng tên với danh mục hệ thống (check cả hệ thống và cá nhân)
         boolean duplicate;
         if (isSystem) {
-            duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUserIsNullAndIsSystemTrueAndDeletedFalse(name, type);
+            // Tạo danh mục hệ thống: chỉ kiểm tra trùng với các danh mục hệ thống khác
+            List<Category> existingSystem = categoryRepository.findByUserIsNullAndIsSystemTrueAndDeletedFalse();
+            duplicate = existingSystem.stream()
+                    .anyMatch(c -> c.getCategoryName().equals(name) &&
+                            c.getTransactionType().equals(type));
         } else {
-            duplicate = categoryRepository.existsByCategoryNameAndTransactionTypeAndUserAndDeletedFalse(name, type, categoryOwner);
+            // Tạo danh mục cá nhân: kiểm tra trùng với cả danh mục hệ thống VÀ danh mục cá nhân của user
+            // 1. Kiểm tra trùng với danh mục hệ thống
+            List<Category> existingSystem = categoryRepository.findByUserIsNullAndIsSystemTrueAndDeletedFalse();
+            boolean duplicateWithSystem = existingSystem.stream()
+                    .anyMatch(c -> c.getCategoryName().equals(name) &&
+                            c.getTransactionType().equals(type));
+
+            // 2. Kiểm tra trùng với danh mục cá nhân của user
+            List<Category> existingPersonal = categoryRepository.findByUserAndDeletedFalse(categoryOwner);
+            boolean duplicateWithPersonal = existingPersonal.stream()
+                    .anyMatch(c -> c.getCategoryName().equals(name) &&
+                            c.getTransactionType().equals(type));
+
+            duplicate = duplicateWithSystem || duplicateWithPersonal;
         }
 
         if (duplicate) {
@@ -96,21 +117,34 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         // Logic cập nhật và check trùng tên khi sửa (chỉ check các category chưa bị xóa, trừ chính nó)
+        // Logic tương tự như create:
+        // - Danh mục hệ thống có thể trùng tên với danh mục cá nhân (chỉ check trùng với danh mục hệ thống khác)
+        // - Danh mục cá nhân KHÔNG được trùng tên với danh mục hệ thống (check cả hệ thống và cá nhân)
         if (name != null && !name.isBlank() && !name.equals(category.getCategoryName())) {
             boolean duplicate;
             if (isSystemCat) {
-                // Check xem có category khác (không phải chính nó) với tên này không
+                // Sửa danh mục hệ thống: chỉ kiểm tra trùng với các danh mục hệ thống khác
                 List<Category> existing = categoryRepository.findByUserIsNullAndIsSystemTrueAndDeletedFalse();
                 duplicate = existing.stream()
                         .anyMatch(c -> !c.getCategoryId().equals(category.getCategoryId()) &&
                                 c.getCategoryName().equals(name) &&
                                 c.getTransactionType().equals(category.getTransactionType()));
             } else {
-                List<Category> existing = categoryRepository.findByUserAndDeletedFalse(currentUser);
-                duplicate = existing.stream()
+                // Sửa danh mục cá nhân: kiểm tra trùng với cả danh mục hệ thống VÀ danh mục cá nhân khác của user
+                // 1. Kiểm tra trùng với danh mục hệ thống
+                List<Category> existingSystem = categoryRepository.findByUserIsNullAndIsSystemTrueAndDeletedFalse();
+                boolean duplicateWithSystem = existingSystem.stream()
+                        .anyMatch(c -> c.getCategoryName().equals(name) &&
+                                c.getTransactionType().equals(category.getTransactionType()));
+
+                // 2. Kiểm tra trùng với danh mục cá nhân khác của user (trừ chính nó)
+                List<Category> existingPersonal = categoryRepository.findByUserAndDeletedFalse(currentUser);
+                boolean duplicateWithPersonal = existingPersonal.stream()
                         .anyMatch(c -> !c.getCategoryId().equals(category.getCategoryId()) &&
                                 c.getCategoryName().equals(name) &&
                                 c.getTransactionType().equals(category.getTransactionType()));
+
+                duplicate = duplicateWithSystem || duplicateWithPersonal;
             }
             if (duplicate) throw new RuntimeException("Tên danh mục đã tồn tại");
             category.setCategoryName(name);
