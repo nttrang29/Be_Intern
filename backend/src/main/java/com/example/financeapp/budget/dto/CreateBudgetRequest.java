@@ -24,6 +24,10 @@ public class CreateBudgetRequest {
     @Size(max = 255, message = "Ghi chú không quá 255 ký tự")
     private String note;
 
+    @Min(value = 0, message = "Ngưỡng cảnh báo phải ≥ 0%")
+    @Max(value = 100, message = "Ngưỡng cảnh báo phải ≤ 100%")
+    private Double warningThreshold = 80.0; // Ngưỡng cảnh báo (%), mặc định 80%
+
     // Getters & Setters
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
@@ -42,4 +46,7 @@ public class CreateBudgetRequest {
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
+
+    public Double getWarningThreshold() { return warningThreshold; }
+    public void setWarningThreshold(Double warningThreshold) { this.warningThreshold = warningThreshold; }
 }

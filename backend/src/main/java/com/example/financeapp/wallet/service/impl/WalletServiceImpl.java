@@ -1,5 +1,7 @@
 package com.example.financeapp.wallet.service.impl;
 
+import com.example.financeapp.fund.entity.Fund;
+import com.example.financeapp.fund.repository.FundRepository;
 import com.example.financeapp.transaction.entity.Transaction;
 import com.example.financeapp.transaction.repository.TransactionRepository;
 import com.example.financeapp.user.entity.User;
@@ -47,6 +49,7 @@ public class WalletServiceImpl implements WalletService {
     @Autowired private TransactionRepository transactionRepository;
     @Autowired private WalletMergeHistoryRepository walletMergeHistoryRepository;
     @Autowired private WalletTransferRepository walletTransferRepository;
+    @Autowired private FundRepository fundRepository;
 
     @Autowired
     private ExchangeRateService exchangeRateService;
@@ -388,6 +391,52 @@ public class WalletServiceImpl implements WalletService {
                     }
 
                     walletTransferRepository.save(transfer);
+                }
+
+                // Chuyển đổi tất cả Funds liên quan đến ví này
+                List<Fund> funds = fundRepository.findByTargetWallet_WalletId(walletId);
+                for (Fund fund : funds) {
+                    // Chuyển đổi currentAmount
+                    if (fund.getCurrentAmount() != null && fund.getCurrentAmount().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal convertedCurrentAmount = exchangeRateService.convertAmount(
+                                fund.getCurrentAmount(),
+                                oldCurrency,
+                                newCurrency
+                        );
+                        fund.setCurrentAmount(convertedCurrentAmount);
+                    }
+
+                    // Chuyển đổi targetAmount (nếu có)
+                    if (fund.getTargetAmount() != null && fund.getTargetAmount().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal convertedTargetAmount = exchangeRateService.convertAmount(
+                                fund.getTargetAmount(),
+                                oldCurrency,
+                                newCurrency
+                        );
+                        fund.setTargetAmount(convertedTargetAmount);
+                    }
+
+                    // Chuyển đổi amountPerPeriod (nếu có)
+                    if (fund.getAmountPerPeriod() != null && fund.getAmountPerPeriod().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal convertedAmountPerPeriod = exchangeRateService.convertAmount(
+                                fund.getAmountPerPeriod(),
+                                oldCurrency,
+                                newCurrency
+                        );
+                        fund.setAmountPerPeriod(convertedAmountPerPeriod);
+                    }
+
+                    // Chuyển đổi autoDepositAmount (nếu có)
+                    if (fund.getAutoDepositAmount() != null && fund.getAutoDepositAmount().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal convertedAutoDepositAmount = exchangeRateService.convertAmount(
+                                fund.getAutoDepositAmount(),
+                                oldCurrency,
+                                newCurrency
+                        );
+                        fund.setAutoDepositAmount(convertedAutoDepositAmount);
+                    }
+
+                    fundRepository.save(fund);
                 }
             }
 

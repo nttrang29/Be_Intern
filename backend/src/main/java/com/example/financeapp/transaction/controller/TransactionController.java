@@ -1,5 +1,7 @@
 package com.example.financeapp.transaction.controller;
 
+import com.example.financeapp.budget.dto.BudgetWarningResponse;
+import com.example.financeapp.budget.service.BudgetCheckService;
 import com.example.financeapp.transaction.dto.CreateTransactionRequest;
 import com.example.financeapp.transaction.dto.UpdateTransactionRequest;
 import com.example.financeapp.transaction.entity.Transaction;
@@ -23,12 +25,61 @@ public class TransactionController {
 
     @Autowired private TransactionService transactionService;
     @Autowired private UserRepository userRepository;
+    @Autowired private BudgetCheckService budgetCheckService;
 
     private Long getCurrentUserId() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
                 .map(User::getUserId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+    }
+
+    /**
+     * Preview cảnh báo budget TRƯỚC KHI tạo transaction (cho frontend hiển thị modal)
+     */
+    @PostMapping("/expense/preview")
+    public ResponseEntity<Map<String, Object>> previewExpenseBudgetWarning(
+            @Valid @RequestBody CreateTransactionRequest request
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            Long userId = getCurrentUserId();
+            BudgetWarningResponse warning = budgetCheckService.previewBudgetWarning(
+                    userId,
+                    request.getCategoryId(),
+                    request.getWalletId(),
+                    request.getAmount(),
+                    request.getTransactionDate().toLocalDate()
+            );
+            
+            if (warning != null && warning.isHasWarning()) {
+                Map<String, Object> warningMap = new HashMap<>();
+                warningMap.put("hasWarning", true);
+                warningMap.put("warningType", warning.getWarningType());
+                warningMap.put("budgetId", warning.getBudgetId());
+                warningMap.put("budgetName", warning.getBudgetName());
+                warningMap.put("amountLimit", warning.getAmountLimit());
+                warningMap.put("currentSpent", warning.getCurrentSpent());
+                warningMap.put("remainingAmount", warning.getRemainingAmount());
+                warningMap.put("exceededAmount", warning.getExceededAmount());
+                warningMap.put("usagePercentage", warning.getUsagePercentage());
+                warningMap.put("message", warning.getMessage());
+                warningMap.put("spentBeforeTransaction", warning.getSpentBeforeTransaction());
+                warningMap.put("remainingBeforeTransaction", warning.getRemainingBeforeTransaction());
+                warningMap.put("transactionAmount", warning.getTransactionAmount());
+                warningMap.put("totalAfterTransaction", warning.getTotalAfterTransaction());
+                warningMap.put("remainingAfterTransaction", warning.getRemainingAfterTransaction());
+                warningMap.put("usagePercentageAfterTransaction", warning.getUsagePercentageAfterTransaction());
+                res.put("budgetWarning", warningMap);
+            } else {
+                res.put("budgetWarning", Map.of("hasWarning", false));
+            }
+            
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        }
     }
 
     @PostMapping("/expense")
@@ -38,6 +89,26 @@ public class TransactionController {
             Transaction tx = transactionService.createExpense(getCurrentUserId(), request);
             res.put("message", "Thêm chi tiêu thành công");
             res.put("transaction", tx);
+            
+            // Kiểm tra và trả về cảnh báo ngân sách (gần hết hoặc vượt hạn mức)
+            BudgetWarningResponse warning = budgetCheckService.checkBudgetWarning(tx);
+            if (warning != null && warning.isHasWarning()) {
+                Map<String, Object> warningMap = new HashMap<>();
+                warningMap.put("hasWarning", true);
+                warningMap.put("warningType", warning.getWarningType());
+                warningMap.put("budgetId", warning.getBudgetId());
+                warningMap.put("budgetName", warning.getBudgetName());
+                warningMap.put("amountLimit", warning.getAmountLimit());
+                warningMap.put("currentSpent", warning.getCurrentSpent());
+                warningMap.put("remainingAmount", warning.getRemainingAmount());
+                warningMap.put("exceededAmount", warning.getExceededAmount());
+                warningMap.put("usagePercentage", warning.getUsagePercentage());
+                warningMap.put("message", warning.getMessage());
+                res.put("budgetWarning", warningMap);
+            } else {
+                res.put("budgetWarning", Map.of("hasWarning", false));
+            }
+            
             return ResponseEntity.ok(res);
         } catch (Exception e) {
             res.put("error", e.getMessage());

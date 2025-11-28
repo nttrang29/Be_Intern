@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
@@ -44,4 +45,61 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
      * Kiểm tra category có trong giao dịch không
      */
     boolean existsByCategory_CategoryId(Long categoryId);
+
+    /**
+     * Tính tổng số tiền đã chi (EXPENSE) trong budget
+     * - Theo user, category, wallet (hoặc tất cả ví nếu walletId = null)
+     * - Trong khoảng thời gian từ startDate đến endDate
+     */
+    @Query("""
+        SELECT COALESCE(SUM(t.amount), 0)
+        FROM Transaction t
+        WHERE t.user.userId = :userId
+          AND t.category.categoryId = :categoryId
+          AND t.transactionType.typeName = 'Chi tiêu'
+          AND (:walletId IS NULL OR t.wallet.walletId = :walletId)
+          AND DATE(t.transactionDate) >= :startDate
+          AND DATE(t.transactionDate) <= :endDate
+        """)
+    BigDecimal calculateTotalSpent(
+            @Param("userId") Long userId,
+            @Param("categoryId") Long categoryId,
+            @Param("walletId") Long walletId,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
+
+    /**
+     * Lấy danh sách giao dịch (EXPENSE) thuộc một budget
+     * - Theo user, category, wallet (hoặc tất cả ví nếu walletId = null)
+     * - Trong khoảng thời gian từ startDate đến endDate
+     * - Sắp xếp theo ngày giao dịch giảm dần (mới nhất trước)
+     */
+    @Query("""
+        SELECT t
+        FROM Transaction t
+        WHERE t.user.userId = :userId
+          AND t.category.categoryId = :categoryId
+          AND t.transactionType.typeName = 'Chi tiêu'
+          AND (:walletId IS NULL OR t.wallet.walletId = :walletId)
+          AND DATE(t.transactionDate) >= :startDate
+          AND DATE(t.transactionDate) <= :endDate
+        ORDER BY t.transactionDate DESC
+        """)
+    List<Transaction> findTransactionsByBudget(
+            @Param("userId") Long userId,
+            @Param("categoryId") Long categoryId,
+            @Param("walletId") Long walletId,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
+
+    /**
+     * Kiểm tra user có giao dịch trong khoảng thời gian không
+     */
+    boolean existsByUser_UserIdAndTransactionDateBetween(
+            Long userId,
+            java.time.LocalDateTime start,
+            java.time.LocalDateTime end
+    );
 }
