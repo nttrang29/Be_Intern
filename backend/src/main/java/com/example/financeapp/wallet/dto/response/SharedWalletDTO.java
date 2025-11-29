@@ -85,6 +85,11 @@ public class SharedWalletDTO {
         this.myRole = myRole;
     }
 
+    @com.fasterxml.jackson.annotation.JsonProperty("role")
+    public String getRole() {
+        return this.myRole;
+    }
+
     public Long getOwnerId() {
         return ownerId;
     }

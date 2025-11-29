@@ -34,7 +34,8 @@ public class WalletMember {
     // Enum cho roles
     public enum WalletRole {
         OWNER,   // Chủ sở hữu ví
-        MEMBER   // Thành viên được chia sẻ
+        MEMBER,  // Thành viên được chia sẻ
+        VIEW     // Chỉ quyền xem
     }
 
     // Constructors

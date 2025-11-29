@@ -225,6 +225,55 @@ public class WalletServiceImpl implements WalletService {
         walletMemberRepository.delete(member);
     }
 
+    @Override
+    @Transactional
+    public void updateMemberRole(Long walletId, Long operatorUserId, Long memberUserId, String role) {
+
+        // Kiểm tra operator là owner
+        if (!isOwner(walletId, operatorUserId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Chỉ chủ sở hữu mới có thể thay đổi quyền thành viên");
+        }
+
+        // Không cho phép thay đổi quyền của chính mình (tránh mất quyền truy cập)
+        if (operatorUserId.equals(memberUserId)) {
+            throw new IllegalArgumentException("Không thể thay đổi quyền của chính bạn");
+        }
+
+        WalletMember target = walletMemberRepository
+                .findByWallet_WalletIdAndUser_UserId(walletId, memberUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Thành viên không tồn tại trong ví"));
+
+        WalletMember.WalletRole newRole;
+        try {
+            newRole = WalletMember.WalletRole.valueOf(role.toUpperCase());
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Vai trò không hợp lệ. Giá trị hợp lệ: OWNER, MEMBER, VIEW");
+        }
+
+        // Nếu target hiện là OWNER và yêu cầu hạ quyền (không phải thông qua transfer ownership), chặn lại
+        if (target.getRole() == WalletMember.WalletRole.OWNER && newRole != WalletMember.WalletRole.OWNER) {
+            throw new IllegalArgumentException("Không thể hạ quyền OWNER trực tiếp. Hãy chuyển OWNER cho thành viên khác nếu cần.");
+        }
+
+        if (newRole == WalletMember.WalletRole.OWNER) {
+            // Promote: hạ owner cũ xuống MEMBER, rồi nâng target lên OWNER
+            walletMemberRepository.findByWallet_WalletIdAndRole(walletId, WalletMember.WalletRole.OWNER)
+                    .ifPresent(oldOwner -> {
+                        if (!oldOwner.getUser().getUserId().equals(target.getUser().getUserId())) {
+                            oldOwner.setRole(WalletMember.WalletRole.MEMBER);
+                            walletMemberRepository.save(oldOwner);
+                        }
+                    });
+
+            target.setRole(WalletMember.WalletRole.OWNER);
+            walletMemberRepository.save(target);
+        } else {
+            // Đặt thành MEMBER hoặc VIEW
+            target.setRole(newRole);
+            walletMemberRepository.save(target);
+        }
+    }
+
     // ---------------- UPDATE WALLET (NEW STYLE) ----------------
     @Override
     @Transactional

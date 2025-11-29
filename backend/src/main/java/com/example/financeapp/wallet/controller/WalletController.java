@@ -27,6 +27,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import com.example.financeapp.wallet.entity.WalletMember;
+import com.example.financeapp.wallet.repository.WalletMemberRepository;
+import com.example.financeapp.wallet.dto.response.WalletMemberDTO;
 
 @RestController
 @RequestMapping("/wallets")
@@ -38,6 +41,9 @@ public class WalletController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private WalletMemberRepository walletMemberRepository;
 
     /**
      * Helper method để lấy userId từ JWT token
@@ -99,9 +105,15 @@ public class WalletController {
         Map<String, Object> res = new HashMap<>();
         try {
             Long userId = getCurrentUserId();
-            Wallet wallet = walletService.getWalletDetails(userId, walletId);
+                Wallet wallet = walletService.getWalletDetails(userId, walletId);
 
-            res.put("wallet", wallet);
+                // Determine current user's role in this wallet
+                String role = walletMemberRepository.findByWallet_WalletIdAndUser_UserId(walletId, userId)
+                    .map(m -> m.getRole().toString())
+                    .orElse("NONE");
+
+                res.put("wallet", wallet);
+                res.put("role", role);
             return ResponseEntity.ok(res);
 
         } catch (RuntimeException e) {
@@ -168,6 +180,55 @@ public class WalletController {
         }
     }
 
+    @RequestMapping(value = "/{walletId}/members/{memberUserId}", method = {RequestMethod.PUT, RequestMethod.PATCH})
+    public ResponseEntity<Map<String, Object>> updateMemberRole(
+            @PathVariable Long walletId,
+            @PathVariable Long memberUserId,
+            @RequestBody Map<String, String> body) {
+
+        Map<String, Object> res = new HashMap<>();
+
+        String role = body != null ? body.get("role") : null;
+        if (role == null || role.isBlank()) {
+            res.put("error", "Trường 'role' bắt buộc");
+            return ResponseEntity.badRequest().body(res);
+        }
+
+        try {
+            Long operatorId = getCurrentUserId();
+            walletService.updateMemberRole(walletId, operatorId, memberUserId, role);
+
+            // Fetch updated member and return DTO
+            WalletMember updated = walletMemberRepository
+                    .findByWallet_WalletIdAndUser_UserId(walletId, memberUserId)
+                    .orElseThrow(() -> new RuntimeException("Thành viên không tồn tại sau khi cập nhật"));
+
+            WalletMemberDTO dto = new WalletMemberDTO(
+                    updated.getMemberId(),
+                    updated.getUser().getUserId(),
+                    updated.getUser().getFullName(),
+                    updated.getUser().getEmail(),
+                    updated.getUser().getAvatar(),
+                    updated.getRole().toString(),
+                    updated.getJoinedAt()
+            );
+
+            res.put("member", dto);
+            res.put("message", "Cập nhật quyền thành công");
+            return ResponseEntity.ok(res);
+
+        } catch (IllegalArgumentException ex) {
+            res.put("error", ex.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            res.put("error", ex.getMessage());
+            return ResponseEntity.status(403).body(res);
+        } catch (Exception ex) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + ex.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
     @DeleteMapping("/{walletId}/members/{memberUserId}")
     public ResponseEntity<Map<String, Object>> removeMember(
             @PathVariable Long walletId, @PathVariable Long memberUserId) {
@@ -215,11 +276,17 @@ public class WalletController {
         Long userId = getCurrentUserId();
 
         boolean hasAccess = walletService.hasAccess(walletId, userId);
-        boolean isOwner = walletService.isOwner(walletId, userId);
-
         res.put("hasAccess", hasAccess);
-        res.put("isOwner", isOwner);
-        res.put("role", isOwner ? "OWNER" : (hasAccess ? "MEMBER" : "NONE"));
+
+        String role = "NONE";
+        if (hasAccess) {
+            role = walletMemberRepository.findByWallet_WalletIdAndUser_UserId(walletId, userId)
+                    .map(m -> m.getRole().toString())
+                    .orElse("NONE");
+        }
+
+        res.put("role", role);
+        res.put("isOwner", "OWNER".equals(role));
 
         return ResponseEntity.ok(res);
     }

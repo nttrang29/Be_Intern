@@ -43,6 +43,15 @@ public interface WalletService {
 
     void leaveWallet(Long walletId, Long userId);
 
+    /**
+     * Cập nhật role cho một thành viên trong wallet.
+     * @param walletId id của wallet
+     * @param operatorUserId id của user thực hiện thay đổi (từ token)
+     * @param memberUserId id của thành viên bị thay đổi
+     * @param role giá trị role mới (OWNER hoặc MEMBER hoặc VIEW)
+     */
+    void updateMemberRole(Long walletId, Long operatorUserId, Long memberUserId, String role);
+
     boolean hasAccess(Long walletId, Long userId);
 
     boolean isOwner(Long walletId, Long userId);
