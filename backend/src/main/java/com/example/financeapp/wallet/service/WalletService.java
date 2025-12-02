@@ -12,6 +12,8 @@ import com.example.financeapp.wallet.dto.response.MergeWalletResponse;
 import com.example.financeapp.wallet.dto.response.SharedWalletDTO;
 import com.example.financeapp.wallet.dto.response.TransferMoneyResponse;
 import com.example.financeapp.wallet.dto.response.WalletMemberDTO;
+import com.example.financeapp.wallet.dto.response.WalletTransactionHistoryDTO;
+import com.example.financeapp.wallet.dto.response.WalletTransferHistoryDTO;
 import com.example.financeapp.wallet.entity.Wallet;
 import com.example.financeapp.wallet.entity.WalletTransfer;
 import jakarta.transaction.Transactional;
@@ -72,4 +74,8 @@ public interface WalletService {
 
     @Transactional
     void deleteTransfer(Long userId, Long transferId);
+
+    List<WalletTransactionHistoryDTO> getWalletTransactions(Long userId, Long walletId);
+
+    List<WalletTransferHistoryDTO> getWalletTransfers(Long userId, Long walletId);
 }
