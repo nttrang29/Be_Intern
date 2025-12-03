@@ -29,7 +29,44 @@ public class BudgetWarningResponse {
 
     public BudgetWarningResponse() {}
 
+    /**
+     * Tạo cảnh báo khi gần hết ngân sách (>= 80% nhưng chưa vượt)
+     */
+    public static BudgetWarningResponse createNearlyExhaustedWarning(
+            Budget budget,
+            BigDecimal currentSpent) {
+        BudgetWarningResponse response = new BudgetWarningResponse();
+        response.setHasWarning(true);
+        response.setWarningType("NEARLY_EXHAUSTED");
+        response.setBudgetId(budget.getBudgetId());
+        response.setBudgetName(budget.getCategory().getCategoryName());
+        response.setAmountLimit(budget.getAmountLimit());
+        response.setCurrentSpent(currentSpent);
 
+        BigDecimal remaining = budget.getAmountLimit().subtract(currentSpent);
+        response.setRemainingAmount(remaining.max(BigDecimal.ZERO));
+        response.setExceededAmount(BigDecimal.ZERO);
+
+        // Tính phần trăm
+        if (budget.getAmountLimit().compareTo(BigDecimal.ZERO) > 0) {
+            double percentage = currentSpent
+                    .divide(budget.getAmountLimit(), 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+            response.setUsagePercentage(percentage);
+        } else {
+            response.setUsagePercentage(0.0);
+        }
+
+        response.setMessage(String.format(
+            "⚠️ Ngân sách \"%s\" đã sử dụng %.1f%%. Còn lại: %s VND",
+            budget.getCategory().getCategoryName(),
+            response.getUsagePercentage(),
+            response.getRemainingAmount()
+        ));
+
+        return response;
+    }
 
     /**
      * Tạo cảnh báo khi vượt hạn mức
