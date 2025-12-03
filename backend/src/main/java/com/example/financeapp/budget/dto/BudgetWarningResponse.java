@@ -4,7 +4,9 @@ import com.example.financeapp.budget.entity.Budget;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-
+/**
+ * DTO để trả về thông tin cảnh báo ngân sách
+ */
 public class BudgetWarningResponse {
     private boolean hasWarning; // Có cảnh báo không
     private String warningType; // "NEARLY_EXHAUSTED" (>= 80%) hoặc "EXCEEDED" (vượt hạn mức)
