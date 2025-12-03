@@ -14,6 +14,8 @@ import com.example.financeapp.wallet.dto.response.SharedWalletDTO;
 import com.example.financeapp.wallet.dto.response.TransferMoneyResponse;
 import com.example.financeapp.wallet.dto.response.UpdateTransferResponse;
 import com.example.financeapp.wallet.dto.response.WalletMemberDTO;
+import com.example.financeapp.wallet.dto.response.WalletTransactionHistoryDTO;
+import com.example.financeapp.wallet.dto.response.WalletTransferHistoryDTO;
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.wallet.entity.Wallet;
 import com.example.financeapp.wallet.entity.WalletTransfer;
@@ -263,6 +265,61 @@ public class WalletController {
         } catch (RuntimeException ex) {
             res.put("error", ex.getMessage());
             return ResponseEntity.badRequest().body(res);
+        }
+    }
+
+    // ========================== WALLET HISTORY ==========================
+
+    @GetMapping("/{walletId}/transactions")
+    public ResponseEntity<Map<String, Object>> getWalletTransactions(
+            @PathVariable Long walletId,
+            @RequestParam(name = "includeTransfers", defaultValue = "false") boolean includeTransfers) {
+
+        Map<String, Object> res = new HashMap<>();
+
+        try {
+            Long userId = getCurrentUserId();
+            List<WalletTransactionHistoryDTO> transactions = walletService.getWalletTransactions(userId, walletId);
+
+            res.put("transactions", transactions);
+            res.put("total", transactions.size());
+
+            if (includeTransfers) {
+                List<WalletTransferHistoryDTO> transfers = walletService.getWalletTransfers(userId, walletId);
+                res.put("transfers", transfers);
+                res.put("transfersTotal", transfers.size());
+            }
+
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException ex) {
+            res.put("error", ex.getMessage());
+            return ResponseEntity.status(403).body(res);
+        } catch (Exception ex) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + ex.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    @GetMapping("/{walletId}/transfers")
+    public ResponseEntity<Map<String, Object>> getWalletTransfers(@PathVariable Long walletId) {
+        Map<String, Object> res = new HashMap<>();
+
+        try {
+            Long userId = getCurrentUserId();
+            List<WalletTransferHistoryDTO> transfers = walletService.getWalletTransfers(userId, walletId);
+
+            res.put("transfers", transfers);
+            res.put("total", transfers.size());
+
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException ex) {
+            res.put("error", ex.getMessage());
+            return ResponseEntity.status(403).body(res);
+        } catch (Exception ex) {
+            res.put("error", "Lỗi máy chủ nội bộ: " + ex.getMessage());
+            return ResponseEntity.status(500).body(res);
         }
     }
 

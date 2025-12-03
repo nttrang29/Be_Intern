@@ -17,6 +17,8 @@ import com.example.financeapp.wallet.dto.response.MergeWalletResponse;
 import com.example.financeapp.wallet.dto.response.SharedWalletDTO;
 import com.example.financeapp.wallet.dto.response.TransferMoneyResponse;
 import com.example.financeapp.wallet.dto.response.WalletMemberDTO;
+import com.example.financeapp.wallet.dto.response.WalletTransactionHistoryDTO;
+import com.example.financeapp.wallet.dto.response.WalletTransferHistoryDTO;
 import com.example.financeapp.wallet.entity.Wallet;
 import com.example.financeapp.wallet.entity.WalletMember;
 import com.example.financeapp.wallet.entity.WalletMember.WalletRole;
@@ -1176,7 +1178,33 @@ public class WalletServiceImpl implements WalletService {
         walletTransferRepository.delete(transfer);
     }
 
+    @Override
+    public List<WalletTransactionHistoryDTO> getWalletTransactions(Long userId, Long walletId) {
+        assertWalletAccess(walletId, userId);
+
+        List<Transaction> transactions = transactionRepository.findDetailedByWalletId(walletId);
+        return transactions.stream()
+                .map(this::mapTransactionHistory)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<WalletTransferHistoryDTO> getWalletTransfers(Long userId, Long walletId) {
+        assertWalletAccess(walletId, userId);
+
+        List<WalletTransfer> transfers = walletTransferRepository.findByWalletId(walletId);
+        return transfers.stream()
+                .map(transfer -> mapTransferHistory(transfer, walletId))
+                .collect(Collectors.toList());
+    }
+
     // ---------------- HELPER ----------------
+    private void assertWalletAccess(Long walletId, Long userId) {
+        if (!hasAccess(walletId, userId)) {
+            throw new RuntimeException("Bạn không có quyền truy cập ví này");
+        }
+    }
+
     private WalletMemberDTO convertToMemberDTO(WalletMember member) {
         User u = member.getUser();
         return new WalletMemberDTO(
@@ -1188,5 +1216,98 @@ public class WalletServiceImpl implements WalletService {
                 member.getRole().toString(),
                 member.getJoinedAt()
         );
+    }
+
+    private WalletTransactionHistoryDTO mapTransactionHistory(Transaction transaction) {
+        WalletTransactionHistoryDTO dto = new WalletTransactionHistoryDTO();
+        dto.setTransactionId(transaction.getTransactionId());
+        dto.setAmount(transaction.getAmount());
+        dto.setOriginalAmount(transaction.getOriginalAmount());
+        dto.setCurrencyCode(transaction.getWallet().getCurrencyCode());
+        dto.setOriginalCurrency(transaction.getOriginalCurrency());
+        dto.setExchangeRate(transaction.getExchangeRate());
+        dto.setTransactionDate(transaction.getTransactionDate());
+        dto.setNote(transaction.getNote());
+        dto.setTransactionType(transaction.getTransactionType().getTypeName());
+
+        WalletTransactionHistoryDTO.CategoryInfo categoryInfo = new WalletTransactionHistoryDTO.CategoryInfo();
+        categoryInfo.setCategoryId(transaction.getCategory().getCategoryId());
+        categoryInfo.setCategoryName(transaction.getCategory().getCategoryName());
+        dto.setCategory(categoryInfo);
+
+        dto.setCreator(buildTransactionCreator(transaction.getUser()));
+        dto.setWallet(buildTransactionWalletInfo(transaction.getWallet()));
+
+        return dto;
+    }
+
+    private WalletTransactionHistoryDTO.UserInfo buildTransactionCreator(User user) {
+        WalletTransactionHistoryDTO.UserInfo info = new WalletTransactionHistoryDTO.UserInfo();
+        info.setUserId(user.getUserId());
+        info.setFullName(user.getFullName());
+        info.setEmail(user.getEmail());
+        info.setAvatar(user.getAvatar());
+        return info;
+    }
+
+    private WalletTransactionHistoryDTO.WalletInfo buildTransactionWalletInfo(Wallet wallet) {
+        WalletTransactionHistoryDTO.WalletInfo walletInfo = new WalletTransactionHistoryDTO.WalletInfo();
+        walletInfo.setWalletId(wallet.getWalletId());
+        walletInfo.setWalletName(wallet.getWalletName());
+        walletInfo.setCurrencyCode(wallet.getCurrencyCode());
+        return walletInfo;
+    }
+
+    private WalletTransferHistoryDTO mapTransferHistory(WalletTransfer transfer, Long walletId) {
+        WalletTransferHistoryDTO dto = new WalletTransferHistoryDTO();
+        dto.setTransferId(transfer.getTransferId());
+        dto.setAmount(transfer.getAmount());
+        dto.setOriginalAmount(transfer.getOriginalAmount());
+        dto.setCurrencyCode(transfer.getCurrencyCode());
+        dto.setOriginalCurrency(transfer.getOriginalCurrency());
+        dto.setExchangeRate(transfer.getExchangeRate());
+        dto.setTransferDate(transfer.getTransferDate());
+        dto.setCreatedAt(transfer.getCreatedAt());
+        dto.setUpdatedAt(transfer.getUpdatedAt());
+        dto.setNote(transfer.getNote());
+        dto.setStatus(transfer.getStatus().name());
+        dto.setDirection(resolveDirection(transfer, walletId));
+        dto.setCreator(buildTransferCreator(transfer.getUser()));
+        dto.setFromWallet(buildWalletEdge(transfer.getFromWallet()));
+        dto.setToWallet(buildWalletEdge(transfer.getToWallet()));
+        return dto;
+    }
+
+    private WalletTransferHistoryDTO.Direction resolveDirection(WalletTransfer transfer, Long walletId) {
+        boolean isSender = transfer.getFromWallet().getWalletId().equals(walletId);
+        boolean isReceiver = transfer.getToWallet().getWalletId().equals(walletId);
+
+        if (isSender && isReceiver) {
+            return WalletTransferHistoryDTO.Direction.INTERNAL;
+        }
+        if (isSender) {
+            return WalletTransferHistoryDTO.Direction.OUTGOING;
+        }
+        if (isReceiver) {
+            return WalletTransferHistoryDTO.Direction.INCOMING;
+        }
+        return WalletTransferHistoryDTO.Direction.INTERNAL;
+    }
+
+    private WalletTransferHistoryDTO.UserInfo buildTransferCreator(User user) {
+        WalletTransferHistoryDTO.UserInfo info = new WalletTransferHistoryDTO.UserInfo();
+        info.setUserId(user.getUserId());
+        info.setFullName(user.getFullName());
+        info.setEmail(user.getEmail());
+        info.setAvatar(user.getAvatar());
+        return info;
+    }
+
+    private WalletTransferHistoryDTO.WalletEdge buildWalletEdge(Wallet wallet) {
+        WalletTransferHistoryDTO.WalletEdge edge = new WalletTransferHistoryDTO.WalletEdge();
+        edge.setWalletId(wallet.getWalletId());
+        edge.setWalletName(wallet.getWalletName());
+        edge.setCurrencyCode(wallet.getCurrencyCode());
+        return edge;
     }
 }
