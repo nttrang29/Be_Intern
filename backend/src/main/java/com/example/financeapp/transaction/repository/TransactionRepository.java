@@ -102,4 +102,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             java.time.LocalDateTime start,
             java.time.LocalDateTime end
     );
+
+    /**
+     * Lấy ngày giao dịch sớm nhất trong phạm vi budget để phục vụ việc chỉnh sửa.
+     */
+    @Query("""
+        SELECT MIN(DATE(t.transactionDate))
+        FROM Transaction t
+        WHERE t.user.userId = :userId
+          AND t.category.categoryId = :categoryId
+          AND (:walletId IS NULL OR t.wallet.walletId = :walletId)
+        """)
+    java.time.LocalDate findEarliestTransactionDate(
+            @Param("userId") Long userId,
+            @Param("categoryId") Long categoryId,
+            @Param("walletId") Long walletId
+    );
 }

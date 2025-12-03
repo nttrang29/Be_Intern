@@ -77,9 +77,8 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
                 b.wallet IS NULL
              OR b.wallet.walletId = :walletId
               )
-          AND b.startDate <= :transactionDate
-          AND b.endDate >= :transactionDate
-          AND b.status = 'ACTIVE'
+      AND b.startDate <= :transactionDate
+      AND b.endDate >= :transactionDate
         ORDER BY b.createdAt DESC
         """)
     List<Budget> findApplicableBudgets(
@@ -87,5 +86,27 @@ public interface BudgetRepository extends JpaRepository<Budget, Long> {
             @Param("categoryId") Long categoryId,
             @Param("walletId") Long walletId,
             @Param("transactionDate") LocalDate transactionDate
+    );
+
+    @Query("""
+        SELECT b
+        FROM Budget b
+        WHERE b.user = :user
+          AND b.category.categoryId = :categoryId
+          AND (
+                (b.wallet IS NULL AND :walletId IS NULL)
+             OR (b.wallet IS NOT NULL AND :walletId IS NOT NULL AND b.wallet.walletId = :walletId)
+             OR (b.wallet IS NULL AND :walletId IS NOT NULL)
+             OR (b.wallet IS NOT NULL AND :walletId IS NULL)
+              )
+          AND b.startDate <= :newEndDate
+          AND b.endDate >= :newStartDate
+        """)
+    List<Budget> findOverlappingBudgets(
+            @Param("user") User user,
+            @Param("categoryId") Long categoryId,
+            @Param("walletId") Long walletId,
+            @Param("newStartDate") LocalDate newStartDate,
+            @Param("newEndDate") LocalDate newEndDate
     );
 }

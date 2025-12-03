@@ -46,7 +46,7 @@ public class Budget {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
-    private BudgetStatus status = BudgetStatus.ACTIVE; // Mặc định là ACTIVE
+    private BudgetStatus status = BudgetStatus.PENDING; // Đặt mặc định, sẽ tự tính lại khi lưu
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

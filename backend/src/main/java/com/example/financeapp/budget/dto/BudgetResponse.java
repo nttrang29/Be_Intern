@@ -1,6 +1,7 @@
 package com.example.financeapp.budget.dto;
 
 import com.example.financeapp.budget.entity.Budget;
+import com.example.financeapp.budget.entity.BudgetStatus;
 import com.example.financeapp.category.entity.Category;
 import com.example.financeapp.wallet.entity.Wallet;
 import java.math.BigDecimal;
@@ -75,30 +76,17 @@ public class BudgetResponse {
         }
         
         // Lấy warningThreshold từ budget (mặc định 80% nếu null)
-        Double warningThreshold = budget.getWarningThreshold() != null 
+        Double warningThreshold = budget.getWarningThreshold() != null
                 ? budget.getWarningThreshold() : 80.0;
         response.setWarningThreshold(warningThreshold);
-        
-        // Xác định trạng thái (OK, WARNING, EXCEEDED) dựa trên warningThreshold
-        if (spentAmount.compareTo(budget.getAmountLimit()) > 0) {
-            response.setStatus("EXCEEDED"); // Vượt ngân sách
-        } else if (response.getUsagePercentage() >= warningThreshold) {
-            response.setStatus("WARNING"); // Sắp hết (>= warningThreshold%)
+
+        BudgetStatus status = budget.getStatus();
+        if (status != null) {
+            response.setStatus(status.name());
+            response.setBudgetStatus(status.name());
         } else {
-            response.setStatus("OK"); // Bình thường
-        }
-        
-        // Trạng thái ngân sách theo thời gian (ACTIVE, COMPLETED)
-        if (budget.getStatus() != null) {
-            response.setBudgetStatus(budget.getStatus().name());
-        } else {
-            // Tự động xác định nếu chưa có status
-            LocalDate today = LocalDate.now();
-            if (today.isAfter(budget.getEndDate())) {
-                response.setBudgetStatus("COMPLETED");
-            } else {
-                response.setBudgetStatus("ACTIVE");
-            }
+            response.setStatus("UNKNOWN");
+            response.setBudgetStatus("UNKNOWN");
         }
         
         response.setStartDate(budget.getStartDate());

@@ -22,11 +22,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
 public class BudgetServiceImpl implements BudgetService {
+
+    private static final EnumSet<BudgetStatus> BLOCKING_STATUSES =
+            EnumSet.of(BudgetStatus.PENDING, BudgetStatus.ACTIVE, BudgetStatus.WARNING, BudgetStatus.EXCEEDED);
 
     @Autowired
     private BudgetRepository budgetRepository;
@@ -48,9 +53,7 @@ public class BudgetServiceImpl implements BudgetService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        if (request.getStartDate().isAfter(request.getEndDate())) {
-            throw new RuntimeException("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
-        }
+        validateDateRange(request.getStartDate(), request.getEndDate());
 
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Danh mục không tồn tại"));
@@ -59,9 +62,10 @@ public class BudgetServiceImpl implements BudgetService {
             throw new RuntimeException("Chỉ được tạo ngân sách cho danh mục Chi tiêu");
         }
 
+        Wallet wallet = null;
         Long walletIdForCheck = null;
         if (request.getWalletId() != null) {
-            Wallet wallet = walletRepository.findById(request.getWalletId())
+            wallet = walletRepository.findById(request.getWalletId())
                     .orElseThrow(() -> new RuntimeException("Ví không tồn tại"));
 
             if (!walletService.hasAccess(wallet.getWalletId(), userId)) {
@@ -70,29 +74,14 @@ public class BudgetServiceImpl implements BudgetService {
             walletIdForCheck = wallet.getWalletId();
         }
 
-        // KIỂM TRA GIAO NHAU (OVERLAP) – CHẶN HOÀN TOÀN
-        boolean hasOverlap = budgetRepository.existsOverlappingBudget(
+        ensureNoOverlappingBudgets(
                 user,
-                request.getCategoryId(),
+                category.getCategoryId(),
                 walletIdForCheck,
                 request.getStartDate(),
-                request.getEndDate()
+                request.getEndDate(),
+                null
         );
-
-        if (hasOverlap) {
-            String walletInfo = walletIdForCheck == null ? "tất cả ví" : "ví đã chọn";
-            throw new RuntimeException(
-                    "Không thể tạo ngân sách mới!\n" +
-                            "Danh mục \"" + category.getCategoryName() + "\" trong " + walletInfo +
-                            " đã có ngân sách đang áp dụng trong khoảng thời gian này.\n" +
-                            "Vui lòng chọn khoảng thời gian không giao nhau hoặc chỉnh sửa ngân sách cũ."
-            );
-        }
-
-        // Nếu không trùng → tạo bình thường
-        Wallet wallet = walletIdForCheck != null
-                ? walletRepository.findById(walletIdForCheck).orElse(null)
-                : null;
 
         Budget budget = new Budget();
         budget.setUser(user);
@@ -103,8 +92,11 @@ public class BudgetServiceImpl implements BudgetService {
         budget.setEndDate(request.getEndDate());
         budget.setNote(request.getNote() != null && !request.getNote().trim().isEmpty()
                 ? request.getNote().trim() : null);
-        budget.setWarningThreshold(request.getWarningThreshold() != null 
-                ? request.getWarningThreshold() : 80.0); // Mặc định 80% nếu không có
+        Double warningThreshold = request.getWarningThreshold() != null
+                ? request.getWarningThreshold()
+                : 80.0;
+        budget.setWarningThreshold(warningThreshold);
+        budget.setStatus(determineBudgetStatus(budget, BigDecimal.ZERO));
 
         return budgetRepository.save(budget);
     }
@@ -117,9 +109,8 @@ public class BudgetServiceImpl implements BudgetService {
         // Chuyển đổi sang BudgetResponse với thông tin đã chi
         return budgets.stream()
                 .map(budget -> {
-                    // Tự động cập nhật status theo thời gian
-                    updateBudgetStatus(budget);
                     BigDecimal spentAmount = calculateSpentAmount(budget);
+                    syncBudgetStatus(budget, spentAmount);
                     return BudgetResponse.fromBudget(budget, spentAmount);
                 })
                 .collect(Collectors.toList());
@@ -136,11 +127,9 @@ public class BudgetServiceImpl implements BudgetService {
             throw new RuntimeException("Bạn không có quyền xem ngân sách này");
         }
 
-        // Tự động cập nhật status theo thời gian
-        updateBudgetStatus(budget);
-
         // Tính số tiền đã chi
         BigDecimal spentAmount = calculateSpentAmount(budget);
+        syncBudgetStatus(budget, spentAmount);
 
         // Trả về BudgetResponse
         return BudgetResponse.fromBudget(budget, spentAmount);
@@ -169,29 +158,6 @@ public class BudgetServiceImpl implements BudgetService {
         );
 
         return transactions;
-    }
-
-    /**
-     * Tự động cập nhật status của budget theo thời gian
-     * ACTIVE: trong khoảng thời gian
-     * COMPLETED: đã qua ngày kết thúc
-     */
-    private void updateBudgetStatus(Budget budget) {
-        LocalDate today = LocalDate.now();
-        
-        if (today.isAfter(budget.getEndDate())) {
-            // Đã qua ngày kết thúc -> COMPLETED
-            if (budget.getStatus() != BudgetStatus.COMPLETED) {
-                budget.setStatus(BudgetStatus.COMPLETED);
-                budgetRepository.save(budget);
-            }
-        } else {
-            // Trong khoảng thời gian -> ACTIVE
-            if (budget.getStatus() != BudgetStatus.ACTIVE) {
-                budget.setStatus(BudgetStatus.ACTIVE);
-                budgetRepository.save(budget);
-            }
-        }
     }
 
     /**
@@ -224,80 +190,39 @@ public class BudgetServiceImpl implements BudgetService {
             throw new RuntimeException("Bạn không có quyền chỉnh sửa ngân sách này");
         }
 
-        // Validation
-        if (request.getStartDate().isAfter(request.getEndDate())) {
-            throw new RuntimeException("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
+        validateDateRange(request.getStartDate(), request.getEndDate());
+
+        Long walletIdForCheck = budget.getWallet() != null ? budget.getWallet().getWalletId() : null;
+        if (request.getWalletId() != null && !Objects.equals(request.getWalletId(), walletIdForCheck)) {
+            throw new RuntimeException("Không thể thay đổi ví nguồn của ngân sách");
         }
 
-        // Kiểm tra wallet nếu có
-        final Long walletIdForCheck;
-        Wallet wallet = null;
-        if (request.getWalletId() != null) {
-            wallet = walletRepository.findById(request.getWalletId())
-                    .orElseThrow(() -> new RuntimeException("Ví không tồn tại"));
+        ensureStartDateNotBeforeExistingTransactions(budget, request.getStartDate());
 
-            if (!walletService.hasAccess(wallet.getWalletId(), userId)) {
-                throw new RuntimeException("Bạn không có quyền truy cập ví này");
-            }
-            walletIdForCheck = wallet.getWalletId();
-        } else {
-            walletIdForCheck = null;
-        }
-
-        // Lưu categoryId và budgetId để dùng trong lambda
-        final Long categoryId = budget.getCategory().getCategoryId();
-        final Long finalBudgetId = budgetId;
-        final LocalDate newStartDate = request.getStartDate();
-        final LocalDate newEndDate = request.getEndDate();
-
-        // KIỂM TRA GIAO NHAU (OVERLAP) – CHẶN HOÀN TOÀN
-        // Loại trừ chính budget hiện tại khi kiểm tra overlap
-        boolean hasOverlap = budgetRepository.existsOverlappingBudget(
+        ensureNoOverlappingBudgets(
                 budget.getUser(),
-                categoryId,
+                budget.getCategory().getCategoryId(),
                 walletIdForCheck,
-                newStartDate,
-                newEndDate
+                request.getStartDate(),
+                request.getEndDate(),
+                budget.getBudgetId()
         );
 
-        // Nếu có overlap, kiểm tra xem có phải chính budget này không
-        if (hasOverlap) {
-            // Kiểm tra xem có budget khác (không phải budget hiện tại) trùng không
-            List<Budget> allBudgets = budgetRepository.findByUser_UserIdOrderByCreatedAtDesc(userId);
-            boolean foundOtherOverlap = allBudgets.stream()
-                    .filter(b -> !b.getBudgetId().equals(finalBudgetId))
-                    .anyMatch(b -> {
-                        Long bWalletId = b.getWallet() != null ? b.getWallet().getWalletId() : null;
-                        boolean walletMatch = (bWalletId == null && walletIdForCheck == null) ||
-                                (bWalletId != null && walletIdForCheck != null && bWalletId.equals(walletIdForCheck));
-                        return walletMatch &&
-                                b.getCategory().getCategoryId().equals(categoryId) &&
-                                !b.getStartDate().isAfter(newEndDate) &&
-                                !b.getEndDate().isBefore(newStartDate);
-                    });
-
-            if (foundOtherOverlap) {
-                throw new RuntimeException("Đã có ngân sách khác trùng khoảng thời gian cho danh mục và ví này");
-            }
-        }
-
         // Cập nhật thông tin
-        budget.setWallet(wallet);
         budget.setAmountLimit(request.getAmountLimit());
         budget.setStartDate(request.getStartDate());
         budget.setEndDate(request.getEndDate());
-        budget.setNote(request.getNote());
+        budget.setNote(request.getNote() != null && !request.getNote().trim().isEmpty()
+                ? request.getNote().trim() : null);
         if (request.getWarningThreshold() != null) {
             budget.setWarningThreshold(request.getWarningThreshold());
         }
-
-        // Tự động cập nhật status theo thời gian
-        updateBudgetStatus(budget);
 
         Budget savedBudget = budgetRepository.save(budget);
 
         // Tính số tiền đã chi
         BigDecimal spentAmount = calculateSpentAmount(savedBudget);
+        syncBudgetStatus(savedBudget, spentAmount);
 
         return BudgetResponse.fromBudget(savedBudget, spentAmount);
     }
@@ -316,5 +241,106 @@ public class BudgetServiceImpl implements BudgetService {
 
         // Xóa budget
         budgetRepository.delete(budget);
+    }
+
+    private void validateDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new RuntimeException("Ngày bắt đầu và ngày kết thúc không được để trống");
+        }
+        if (!endDate.isAfter(startDate)) {
+            throw new RuntimeException("Ngày kết thúc phải lớn hơn ngày bắt đầu");
+        }
+    }
+
+    private void ensureNoOverlappingBudgets(User user,
+                                            Long categoryId,
+                                            Long walletId,
+                                            LocalDate startDate,
+                                            LocalDate endDate,
+                                            Long currentBudgetId) {
+        List<Budget> overlaps = budgetRepository.findOverlappingBudgets(
+                user,
+                categoryId,
+                walletId,
+                startDate,
+                endDate
+        );
+
+        for (Budget existing : overlaps) {
+            if (currentBudgetId != null && existing.getBudgetId().equals(currentBudgetId)) {
+                continue;
+            }
+            BudgetStatus status = syncBudgetStatus(existing);
+            if (BLOCKING_STATUSES.contains(status)) {
+                String walletInfo = walletId == null ? "tất cả ví" : "ví đã chọn";
+                throw new RuntimeException(
+                        "Danh mục \"" + existing.getCategory().getCategoryName() + "\" trong " + walletInfo +
+                                " đã có ngân sách (" + status.name() + ") trùng thời gian. Vui lòng chọn khoảng thời gian khác.");
+            }
+        }
+    }
+
+    private void ensureStartDateNotBeforeExistingTransactions(Budget budget, LocalDate newStartDate) {
+        if (newStartDate == null) {
+            return;
+        }
+
+        Long walletId = budget.getWallet() != null ? budget.getWallet().getWalletId() : null;
+        LocalDate earliestTransactionDate = transactionRepository.findEarliestTransactionDate(
+                budget.getUser().getUserId(),
+                budget.getCategory().getCategoryId(),
+                walletId
+        );
+
+        if (earliestTransactionDate != null && newStartDate.isBefore(earliestTransactionDate)) {
+            throw new RuntimeException("Ngày bắt đầu không được nhỏ hơn ngày giao dịch đã phát sinh (" + earliestTransactionDate + ")");
+        }
+    }
+
+    private BudgetStatus syncBudgetStatus(Budget budget) {
+        BigDecimal spentAmount = calculateSpentAmount(budget);
+        return syncBudgetStatus(budget, spentAmount);
+    }
+
+    private BudgetStatus syncBudgetStatus(Budget budget, BigDecimal spentAmount) {
+        BudgetStatus newStatus = determineBudgetStatus(budget, spentAmount);
+        if (budget.getStatus() != newStatus) {
+            budget.setStatus(newStatus);
+            budgetRepository.save(budget);
+        }
+        return newStatus;
+    }
+
+    private BudgetStatus determineBudgetStatus(Budget budget, BigDecimal spentAmount) {
+        BigDecimal limit = budget.getAmountLimit() != null ? budget.getAmountLimit() : BigDecimal.ZERO;
+        BigDecimal safeSpent = spentAmount != null ? spentAmount : BigDecimal.ZERO;
+        LocalDate today = LocalDate.now();
+        Double warningThreshold = budget.getWarningThreshold() != null ? budget.getWarningThreshold() : 80.0;
+
+        if (limit.compareTo(BigDecimal.ZERO) > 0 && safeSpent.compareTo(limit) > 0) {
+            return BudgetStatus.EXCEEDED;
+        }
+
+        if (today.isBefore(budget.getStartDate())) {
+            return BudgetStatus.PENDING;
+        }
+
+        if (today.isAfter(budget.getEndDate())) {
+            return BudgetStatus.COMPLETED;
+        }
+
+        double usage = 0.0;
+        if (limit.compareTo(BigDecimal.ZERO) > 0) {
+            usage = safeSpent
+                    .divide(limit, 4, java.math.RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        if (usage >= warningThreshold) {
+            return BudgetStatus.WARNING;
+        }
+
+        return BudgetStatus.ACTIVE;
     }
 }

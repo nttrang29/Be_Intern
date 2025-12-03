@@ -3,12 +3,14 @@ package com.example.financeapp.transaction.entity;
 import com.example.financeapp.category.entity.Category;
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.wallet.entity.Wallet;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "transactions")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Transaction {
 
     @Id

@@ -1,9 +1,11 @@
 package com.example.financeapp.transaction.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 
 @Entity
 @Table(name = "transaction_types")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class TransactionType {
 
     @Id
