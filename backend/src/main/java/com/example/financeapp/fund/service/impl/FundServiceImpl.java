@@ -32,16 +32,16 @@ public class FundServiceImpl implements FundService {
 
     @Autowired
     private FundRepository fundRepository;
-    
+
     @Autowired
     private FundMemberRepository fundMemberRepository;
-    
+
     @Autowired
     private UserRepository userRepository;
-    
+
     @Autowired
     private WalletRepository walletRepository;
-    
+
     @Autowired
     private WalletService walletService;
 
@@ -89,7 +89,7 @@ public class FundServiceImpl implements FundService {
         fund.setStatus(FundStatus.ACTIVE);
         fund.setCurrentAmount(BigDecimal.ZERO); // Bắt đầu từ 0
         fund.setNote(request.getNote());
-        
+
         // Set các trường theo hasDeadline
         if (request.getHasDeadline()) {
             // Có kỳ hạn: bắt buộc các trường
@@ -187,13 +187,13 @@ public class FundServiceImpl implements FundService {
     @Override
     public List<FundResponse> getPersonalFunds(Long userId, Boolean hasDeadline) {
         List<Fund> funds = fundRepository.findByOwner_UserIdAndFundTypeOrderByCreatedAtDesc(userId, FundType.PERSONAL);
-        
+
         if (hasDeadline != null) {
             funds = funds.stream()
                     .filter(f -> f.getHasDeadline().equals(hasDeadline))
                     .collect(Collectors.toList());
         }
-        
+
         return funds.stream()
                 .map(this::buildFundResponse)
                 .collect(Collectors.toList());
@@ -203,13 +203,13 @@ public class FundServiceImpl implements FundService {
     public List<FundResponse> getGroupFunds(Long userId, Boolean hasDeadline) {
         List<Fund> funds = fundRepository.findByOwner_UserIdAndFundTypeAndStatusOrderByCreatedAtDesc(
                 userId, FundType.GROUP, FundStatus.ACTIVE);
-        
+
         if (hasDeadline != null) {
             funds = funds.stream()
                     .filter(f -> f.getHasDeadline().equals(hasDeadline))
                     .collect(Collectors.toList());
         }
-        
+
         return funds.stream()
                 .map(this::buildFundResponse)
                 .collect(Collectors.toList());
@@ -230,8 +230,8 @@ public class FundServiceImpl implements FundService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         // Kiểm tra quyền: user phải là chủ quỹ hoặc thành viên
-        if (!fund.getOwner().getUserId().equals(userId) && 
-            !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
+        if (!fund.getOwner().getUserId().equals(userId) &&
+                !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
             throw new RuntimeException("Bạn không có quyền xem quỹ này");
         }
 
@@ -338,7 +338,7 @@ public class FundServiceImpl implements FundService {
 
         // Xóa thành viên trước
         fundMemberRepository.deleteByFund_FundId(fundId);
-        
+
         // Xóa quỹ
         fundRepository.delete(fund);
     }
@@ -350,8 +350,8 @@ public class FundServiceImpl implements FundService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
         // Kiểm tra quyền
-        if (!fund.getOwner().getUserId().equals(userId) && 
-            !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
+        if (!fund.getOwner().getUserId().equals(userId) &&
+                !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
             throw new RuntimeException("Bạn không có quyền nạp tiền vào quỹ này");
         }
 
@@ -362,19 +362,36 @@ public class FundServiceImpl implements FundService {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Số tiền nạp phải lớn hơn 0");
         }
+        // Lấy ví nguồn và ví đích với lock để đảm bảo nhất quán số dư
+        Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
+
+        // Kiểm tra user có quyền trên ví nguồn
+        if (!walletService.hasAccess(sourceWallet.getWalletId(), userId)) {
+            throw new RuntimeException("Bạn không có quyền truy cập ví nguồn của quỹ");
+        }
+
+        // Kiểm tra đủ số dư ví nguồn
+        if (sourceWallet.getBalance().compareTo(amount) < 0) {
+            throw new RuntimeException("Số dư ví nguồn không đủ để nạp số tiền này vào quỹ");
+        }
+
+        // Trừ ví nguồn, cộng ví đích
+        sourceWallet.setBalance(sourceWallet.getBalance().subtract(amount));
+        targetWallet.setBalance(targetWallet.getBalance().add(amount));
+        walletRepository.save(sourceWallet);
+        walletRepository.save(targetWallet);
 
         // Cập nhật số tiền quỹ
         fund.setCurrentAmount(fund.getCurrentAmount().add(amount));
-        
-        // Cập nhật số dư ví đích
-        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
-                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
-        targetWallet.setBalance(targetWallet.getBalance().add(amount));
-        walletRepository.save(targetWallet);
 
-        // Kiểm tra nếu đạt mục tiêu
+        // Nếu là quỹ có kỳ hạn và đã đạt mục tiêu, chỉ đánh dấu trạng thái COMPLETED
+        // nhưng KHÔNG tự động rút tiền về ví nguồn. Việc rút sẽ do người dùng thực hiện
+        // thủ công qua flow "Rút toàn bộ về ví nguồn" trên UI.
         if (fund.getHasDeadline() && fund.getTargetAmount() != null &&
-            fund.getCurrentAmount().compareTo(fund.getTargetAmount()) >= 0) {
+                fund.getCurrentAmount().compareTo(fund.getTargetAmount()) >= 0) {
             fund.setStatus(FundStatus.COMPLETED);
         }
 
@@ -408,7 +425,7 @@ public class FundServiceImpl implements FundService {
 
         // Trừ số tiền quỹ
         fund.setCurrentAmount(fund.getCurrentAmount().subtract(amount));
-        
+
         // Trừ số dư ví đích
         Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
@@ -419,13 +436,61 @@ public class FundServiceImpl implements FundService {
         return buildFundResponse(fund);
     }
 
+    /**
+     * Tất toán quỹ có kỳ hạn khi đạt mục tiêu và chuyển toàn bộ tiền từ ví quỹ
+     * về ví nguồn (sourceWallet).
+     */
+    @Transactional
+    protected void settleFundAndTransferToSourceWallet(Fund fund) {
+        if (fund == null) {
+            throw new RuntimeException("Quỹ không hợp lệ");
+        }
+
+        if (!Boolean.TRUE.equals(fund.getHasDeadline())) {
+            // Chỉ áp dụng cho quỹ có kỳ hạn
+            return;
+        }
+
+        BigDecimal currentAmount = fund.getCurrentAmount();
+        if (currentAmount == null || currentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            // Không có tiền để chuyển
+            fund.setStatus(FundStatus.COMPLETED);
+            return;
+        }
+
+        Wallet sourceWallet = fund.getSourceWallet();
+        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví quỹ không tồn tại"));
+
+        if (sourceWallet == null) {
+            throw new RuntimeException("Không tìm thấy ví nguồn để tất toán quỹ");
+        }
+
+        // Cập nhật số dư ví: rút toàn bộ khỏi ví quỹ, cộng vào ví nguồn
+        if (targetWallet.getBalance().compareTo(currentAmount) < 0) {
+            // Trường hợp dữ liệu lệch, chỉ chuyển tối đa bằng số dư ví quỹ
+            currentAmount = targetWallet.getBalance();
+        }
+
+        targetWallet.setBalance(targetWallet.getBalance().subtract(currentAmount));
+        sourceWallet.setBalance(sourceWallet.getBalance().add(currentAmount));
+
+        walletRepository.save(targetWallet);
+        walletRepository.save(sourceWallet);
+
+        // Cập nhật trạng thái quỹ
+        fund.setCurrentAmount(BigDecimal.ZERO);
+        fund.setStatus(FundStatus.COMPLETED);
+        fundRepository.save(fund);
+    }
+
     @Override
     public boolean isWalletUsed(Long walletId) {
         // Kiểm tra ví có được dùng cho quỹ không
         if (fundRepository.existsByTargetWallet_WalletId(walletId)) {
             return true;
         }
-        
+
         // Kiểm tra ví có được dùng cho ngân sách không
         // (Cần thêm method vào BudgetRepository nếu chưa có)
         return false; // Tạm thời return false, sẽ bổ sung sau
@@ -441,7 +506,7 @@ public class FundServiceImpl implements FundService {
             if (request.getTargetAmount() == null || request.getTargetAmount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new RuntimeException("Số tiền mục tiêu phải lớn hơn 0");
             }
-            
+
             // Kiểm tra số tiền mục tiêu tối thiểu
             if (request.getTargetAmount().compareTo(new BigDecimal("1000")) < 0) {
                 throw new RuntimeException("Số tiền mục tiêu phải lớn hơn hoặc bằng 1,000");
@@ -515,7 +580,7 @@ public class FundServiceImpl implements FundService {
             if (request.getAutoDepositScheduleType() == null) {
                 throw new RuntimeException("Vui lòng chọn tần suất tự động nạp tiền");
             }
-            
+
             if (request.getAutoDepositAmount() == null || request.getAutoDepositAmount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new RuntimeException("Số tiền mỗi lần nạp phải lớn hơn 0");
             }
@@ -547,7 +612,7 @@ public class FundServiceImpl implements FundService {
 
     private FundResponse buildFundResponse(Fund fund) {
         FundResponse response = FundResponse.fromEntity(fund);
-        
+
         // Load thành viên nếu là quỹ nhóm
         if (fund.getFundType() == FundType.GROUP) {
             List<FundMember> members = fundMemberRepository.findByFund_FundIdOrderByJoinedAtAsc(fund.getFundId());
@@ -557,7 +622,7 @@ public class FundServiceImpl implements FundService {
             response.setMembers(memberResponses);
             response.setMemberCount(members.size());
         }
-        
+
         return response;
     }
 }
