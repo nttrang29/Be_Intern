@@ -25,23 +25,6 @@ public class UpdateBudgetRequest {
     @Max(value = 100, message = "Ngưỡng cảnh báo phải ≤ 100%")
     private Double warningThreshold; // Ngưỡng cảnh báo (%)
 
-    // Getters & Setters
-    public Long getWalletId() { return walletId; }
-    public void setWalletId(Long walletId) { this.walletId = walletId; }
 
-    public BigDecimal getAmountLimit() { return amountLimit; }
-    public void setAmountLimit(BigDecimal amountLimit) { this.amountLimit = amountLimit; }
-
-    public LocalDate getStartDate() { return startDate; }
-    public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
-
-    public LocalDate getEndDate() { return endDate; }
-    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
-
-    public String getNote() { return note; }
-    public void setNote(String note) { this.note = note; }
-
-    public Double getWarningThreshold() { return warningThreshold; }
-    public void setWarningThreshold(Double warningThreshold) { this.warningThreshold = warningThreshold; }
 }
 
