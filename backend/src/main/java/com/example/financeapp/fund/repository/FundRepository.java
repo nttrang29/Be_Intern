@@ -116,5 +116,127 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         WHERE f.targetWallet.walletId = :walletId
         """)
     List<Fund> findByTargetWallet_WalletId(@Param("walletId") Long walletId);
+
+    /**
+     * Tìm các quỹ cần nhắc nhở theo DAILY
+     */
+    @Query("""
+        SELECT DISTINCT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.targetWallet
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE f.reminderEnabled = true
+          AND f.reminderType = 'DAILY'
+          AND f.status = 'ACTIVE'
+          AND f.reminderTime <= :currentTime
+          AND f.reminderTime >= :startTime
+        """)
+    List<Fund> findDailyReminders(
+        @Param("startTime") java.time.LocalTime startTime,
+        @Param("currentTime") java.time.LocalTime currentTime
+    );
+
+    /**
+     * Tìm các quỹ cần nhắc nhở theo WEEKLY
+     */
+    @Query("""
+        SELECT DISTINCT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.targetWallet
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE f.reminderEnabled = true
+          AND f.reminderType = 'WEEKLY'
+          AND f.status = 'ACTIVE'
+          AND f.reminderDayOfWeek = :dayOfWeek
+          AND f.reminderTime <= :currentTime
+          AND f.reminderTime >= :startTime
+        """)
+    List<Fund> findWeeklyReminders(
+        @Param("dayOfWeek") Integer dayOfWeek,
+        @Param("startTime") java.time.LocalTime startTime,
+        @Param("currentTime") java.time.LocalTime currentTime
+    );
+
+    /**
+     * Tìm các quỹ cần nhắc nhở theo MONTHLY
+     */
+    @Query("""
+        SELECT DISTINCT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.targetWallet
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE f.reminderEnabled = true
+          AND f.reminderType = 'MONTHLY'
+          AND f.status = 'ACTIVE'
+          AND f.reminderDayOfMonth = :dayOfMonth
+          AND f.reminderTime <= :currentTime
+          AND f.reminderTime >= :startTime
+        """)
+    List<Fund> findMonthlyReminders(
+        @Param("dayOfMonth") Integer dayOfMonth,
+        @Param("startTime") java.time.LocalTime startTime,
+        @Param("currentTime") java.time.LocalTime currentTime
+    );
+
+    /**
+     * Tìm các quỹ cần tự động nạp tiền theo DAILY
+     */
+    @Query("""
+        SELECT DISTINCT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.targetWallet
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE f.autoDepositEnabled = true
+          AND f.autoDepositScheduleType = 'DAILY'
+          AND f.status = 'ACTIVE'
+          AND f.autoDepositTime <= :currentTime
+          AND f.autoDepositTime >= :startTime
+        """)
+    List<Fund> findDailyAutoDeposits(
+        @Param("startTime") java.time.LocalTime startTime,
+        @Param("currentTime") java.time.LocalTime currentTime
+    );
+
+    /**
+     * Tìm các quỹ cần tự động nạp tiền theo WEEKLY
+     */
+    @Query("""
+        SELECT DISTINCT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.targetWallet
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE f.autoDepositEnabled = true
+          AND f.autoDepositScheduleType = 'WEEKLY'
+          AND f.status = 'ACTIVE'
+          AND f.autoDepositDayOfWeek = :dayOfWeek
+          AND f.autoDepositTime <= :currentTime
+          AND f.autoDepositTime >= :startTime
+        """)
+    List<Fund> findWeeklyAutoDeposits(
+        @Param("dayOfWeek") Integer dayOfWeek,
+        @Param("startTime") java.time.LocalTime startTime,
+        @Param("currentTime") java.time.LocalTime currentTime
+    );
+
+    /**
+     * Tìm các quỹ cần tự động nạp tiền theo MONTHLY
+     */
+    @Query("""
+        SELECT DISTINCT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.targetWallet
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE f.autoDepositEnabled = true
+          AND f.autoDepositScheduleType = 'MONTHLY'
+          AND f.status = 'ACTIVE'
+          AND f.autoDepositDayOfMonth = :dayOfMonth
+          AND f.autoDepositTime <= :currentTime
+          AND f.autoDepositTime >= :startTime
+        """)
+    List<Fund> findMonthlyAutoDeposits(
+        @Param("dayOfMonth") Integer dayOfMonth,
+        @Param("startTime") java.time.LocalTime startTime,
+        @Param("currentTime") java.time.LocalTime currentTime
+    );
 }
 

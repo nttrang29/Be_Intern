@@ -19,8 +19,8 @@ public class CreateFundRequest {
     @Size(max = 200, message = "Tên quỹ không quá 200 ký tự")
     private String fundName;
 
-    @NotNull(message = "Vui lòng chọn ví đích")
-    private Long targetWalletId;
+    @NotNull(message = "Vui lòng chọn ví nguồn")
+    private Long sourceWalletId; // Ví nguồn để nạp tiền vào quỹ
 
     @NotNull(message = "Vui lòng chọn loại quỹ")
     private FundType fundType; // PERSONAL hoặc GROUP
@@ -47,17 +47,15 @@ public class CreateFundRequest {
     private Integer reminderMonth; // 1-12 cho YEARLY
     private Integer reminderDay; // 1-31 cho YEARLY
 
-    // Tự động nạp tiền
+    // Tự động nạp tiền (theo tần suất của quỹ)
     private Boolean autoDepositEnabled = false;
-    private AutoDepositType autoDepositType; // FOLLOW_REMINDER hoặc CUSTOM_SCHEDULE
-    private Long sourceWalletId; // Bắt buộc nếu autoDepositEnabled = true
-    private ReminderType autoDepositScheduleType; // Cho CUSTOM_SCHEDULE
+    private ReminderType autoDepositScheduleType; // DAILY, WEEKLY, MONTHLY, YEARLY (theo frequency)
     private LocalTime autoDepositTime;
     private Integer autoDepositDayOfWeek;
     private Integer autoDepositDayOfMonth;
     private Integer autoDepositMonth;
     private Integer autoDepositDay;
-    private BigDecimal autoDepositAmount; // Bắt buộc nếu autoDepositEnabled = true
+    private BigDecimal autoDepositAmount; // Số tiền tự động nạp mỗi lần
 
     private String note;
 
@@ -83,8 +81,8 @@ public class CreateFundRequest {
     public String getFundName() { return fundName; }
     public void setFundName(String fundName) { this.fundName = fundName; }
 
-    public Long getTargetWalletId() { return targetWalletId; }
-    public void setTargetWalletId(Long targetWalletId) { this.targetWalletId = targetWalletId; }
+    public Long getSourceWalletId() { return sourceWalletId; }
+    public void setSourceWalletId(Long sourceWalletId) { this.sourceWalletId = sourceWalletId; }
 
     public FundType getFundType() { return fundType; }
     public void setFundType(FundType fundType) { this.fundType = fundType; }
@@ -130,12 +128,6 @@ public class CreateFundRequest {
 
     public Boolean getAutoDepositEnabled() { return autoDepositEnabled; }
     public void setAutoDepositEnabled(Boolean autoDepositEnabled) { this.autoDepositEnabled = autoDepositEnabled; }
-
-    public AutoDepositType getAutoDepositType() { return autoDepositType; }
-    public void setAutoDepositType(AutoDepositType autoDepositType) { this.autoDepositType = autoDepositType; }
-
-    public Long getSourceWalletId() { return sourceWalletId; }
-    public void setSourceWalletId(Long sourceWalletId) { this.sourceWalletId = sourceWalletId; }
 
     public ReminderType getAutoDepositScheduleType() { return autoDepositScheduleType; }
     public void setAutoDepositScheduleType(ReminderType autoDepositScheduleType) { this.autoDepositScheduleType = autoDepositScheduleType; }

@@ -95,5 +95,69 @@ public class EmailService {
                 + "Trân trọng,\nHệ thống MyWallet";
         send(adminEmail, emailSubject, emailContent);
     }
+
+    // ====== Gửi nhắc nhở nạp quỹ ======
+    public void sendFundReminderEmail(String email, String fullName, String fundName, 
+                                      String currentAmount, String targetAmount, String currency) {
+        String subject = "[MyWallet] 💰 Nhắc nhở nạp quỹ";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Đã đến lúc nạp tiền vào quỹ tiết kiệm của bạn!\n\n"
+                + "📊 Thông tin quỹ:\n"
+                + "   • Tên quỹ: " + fundName + "\n"
+                + "   • Số tiền hiện tại: " + currentAmount + " " + currency + "\n"
+                + (targetAmount != null ? "   • Mục tiêu: " + targetAmount + " " + currency + "\n" : "")
+                + "\n"
+                + "💡 Hãy đăng nhập vào ứng dụng để nạp tiền vào quỹ ngay!\n\n"
+                + "Nếu bạn đã nạp tiền, vui lòng bỏ qua email này.\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
+
+    // ====== Gửi thông báo tự động nạp quỹ thành công ======
+    public void sendAutoDepositSuccessEmail(String email, String fullName, String fundName,
+                                           String depositAmount, String newBalance, String currency,
+                                           String sourceWalletName) {
+        String subject = "[MyWallet] ✅ Tự động nạp quỹ thành công";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Hệ thống đã tự động nạp tiền vào quỹ của bạn!\n\n"
+                + "📊 Chi tiết:\n"
+                + "   • Quỹ: " + fundName + "\n"
+                + "   • Số tiền nạp: " + depositAmount + " " + currency + "\n"
+                + "   • Từ ví: " + sourceWalletName + "\n"
+                + "   • Số dư mới trong quỹ: " + newBalance + " " + currency + "\n"
+                + "\n"
+                + "✨ Bạn đang tiến gần hơn đến mục tiêu của mình!\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
+
+    // ====== Gửi thông báo tự động nạp quỹ thất bại ======
+    public void sendAutoDepositFailedEmail(String email, String fullName, String fundName, String reason) {
+        String subject = "[MyWallet] ⚠️ Tự động nạp quỹ thất bại";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Hệ thống không thể tự động nạp tiền vào quỹ của bạn.\n\n"
+                + "📊 Thông tin:\n"
+                + "   • Quỹ: " + fundName + "\n"
+                + "   • Lý do: " + reason + "\n"
+                + "\n"
+                + "💡 Vui lòng đăng nhập để kiểm tra và nạp tiền thủ công.\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
+
+    // ====== Gửi thông báo quỹ đạt mục tiêu ======
+    public void sendFundCompletedEmail(String email, String fullName, String fundName,
+                                       String targetAmount, String currency) {
+        String subject = "[MyWallet] 🎉 Chúc mừng! Quỹ đã đạt mục tiêu";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Chúc mừng bạn! Quỹ tiết kiệm của bạn đã hoàn thành mục tiêu!\n\n"
+                + "📊 Thông tin quỹ:\n"
+                + "   • Tên quỹ: " + fundName + "\n"
+                + "   • Mục tiêu đã đạt: " + targetAmount + " " + currency + "\n"
+                + "\n"
+                + "🎊 Bạn thật tuyệt vời! Hãy tiếp tục duy trì thói quen tiết kiệm tốt này nhé!\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
 }
 

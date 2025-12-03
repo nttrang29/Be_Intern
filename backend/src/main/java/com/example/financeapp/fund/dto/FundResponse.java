@@ -106,7 +106,8 @@ public class FundResponse {
         
         // Auto Deposit
         response.setAutoDepositEnabled(fund.getAutoDepositEnabled());
-        response.setAutoDepositType(fund.getAutoDepositType() != null ? fund.getAutoDepositType().name() : null);
+        // autoDepositType không còn sử dụng nữa (để null)
+        response.setAutoDepositType(null);
         if (fund.getSourceWallet() != null) {
             response.setSourceWalletId(fund.getSourceWallet().getWalletId());
             response.setSourceWalletName(fund.getSourceWallet().getWalletName());

@@ -1,6 +1,5 @@
 package com.example.financeapp.fund.dto;
 
-import com.example.financeapp.fund.entity.AutoDepositType;
 import com.example.financeapp.fund.entity.FundFrequency;
 import com.example.financeapp.fund.entity.ReminderType;
 import java.math.BigDecimal;
@@ -28,10 +27,8 @@ public class UpdateFundRequest {
     private Integer reminderMonth;
     private Integer reminderDay;
     
-    // Auto Deposit
+    // Auto Deposit (sourceWallet không thể thay đổi sau khi tạo)
     private Boolean autoDepositEnabled;
-    private AutoDepositType autoDepositType;
-    private Long sourceWalletId;
     private ReminderType autoDepositScheduleType;
     private LocalTime autoDepositTime;
     private Integer autoDepositDayOfWeek;
@@ -96,12 +93,6 @@ public class UpdateFundRequest {
 
     public Boolean getAutoDepositEnabled() { return autoDepositEnabled; }
     public void setAutoDepositEnabled(Boolean autoDepositEnabled) { this.autoDepositEnabled = autoDepositEnabled; }
-
-    public AutoDepositType getAutoDepositType() { return autoDepositType; }
-    public void setAutoDepositType(AutoDepositType autoDepositType) { this.autoDepositType = autoDepositType; }
-
-    public Long getSourceWalletId() { return sourceWalletId; }
-    public void setSourceWalletId(Long sourceWalletId) { this.sourceWalletId = sourceWalletId; }
 
     public ReminderType getAutoDepositScheduleType() { return autoDepositScheduleType; }
     public void setAutoDepositScheduleType(ReminderType autoDepositScheduleType) { this.autoDepositScheduleType = autoDepositScheduleType; }
