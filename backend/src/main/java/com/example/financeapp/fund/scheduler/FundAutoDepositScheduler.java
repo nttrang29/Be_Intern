@@ -6,6 +6,7 @@ import com.example.financeapp.wallet.repository.WalletTransferRepository;
 import com.example.financeapp.fund.entity.Fund;
 import com.example.financeapp.fund.repository.FundRepository;
 import com.example.financeapp.fund.service.FundService;
+import com.example.financeapp.notification.service.NotificationService;
 import com.example.financeapp.wallet.entity.Wallet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -151,6 +152,18 @@ public class FundAutoDepositScheduler {
                     walletTransferRepository.save(cancelled);
                 } catch (Exception txErr) {
                     log.error("Lỗi khi ghi WalletTransfer cancelled: {}", txErr.getMessage());
+                }
+
+                // Tạo thông báo in-app
+                try {
+                    notificationService.createFundAutoDepositFailedNotification(
+                            fund.getOwner().getUserId(),
+                            fund.getFundId(),
+                            fund.getFundName(),
+                            e.getMessage()
+                    );
+                } catch (Exception notifError) {
+                    log.error("Lỗi khi tạo notification auto-deposit failed: {}", notifError.getMessage());
                 }
             }
         }

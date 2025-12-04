@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class NotificationResponse {
 
     private Long notificationId;
+    private String receiverRole;
     private String type;
     private String title;
     private String message;
@@ -22,6 +23,7 @@ public class NotificationResponse {
     public static NotificationResponse fromEntity(Notification notification) {
         NotificationResponse response = new NotificationResponse();
         response.setNotificationId(notification.getNotificationId());
+        response.setReceiverRole(notification.getReceiverRole());
         response.setType(notification.getType().name());
         response.setTitle(notification.getTitle());
         response.setMessage(notification.getMessage());
@@ -40,6 +42,14 @@ public class NotificationResponse {
 
     public void setNotificationId(Long notificationId) {
         this.notificationId = notificationId;
+    }
+
+    public String getReceiverRole() {
+        return receiverRole;
+    }
+
+    public void setReceiverRole(String receiverRole) {
+        this.receiverRole = receiverRole;
     }
 
     public String getType() {

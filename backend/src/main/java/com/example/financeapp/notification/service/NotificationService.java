@@ -72,5 +72,38 @@ public interface NotificationService {
      * Xóa thông báo
      */
     void deleteNotification(Long notificationId, Long userId, String role);
+
+    /**
+     * Tạo thông báo tự động nạp quỹ thành công
+     */
+    Notification createFundAutoDepositSuccessNotification(
+            Long userId,
+            Long fundId,
+            String fundName,
+            String depositAmount,
+            String newBalance,
+            String currency
+    );
+
+    /**
+     * Tạo thông báo tự động nạp quỹ thất bại
+     */
+    Notification createFundAutoDepositFailedNotification(
+            Long userId,
+            Long fundId,
+            String fundName,
+            String reason
+    );
+
+    /**
+     * Tạo thông báo quỹ đã đạt mục tiêu
+     */
+    Notification createFundCompletedNotification(
+            Long userId,
+            Long fundId,
+            String fundName,
+            String targetAmount,
+            String currency
+    );
 }
 

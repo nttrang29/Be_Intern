@@ -54,13 +54,16 @@ public class Notification {
 
     // Enum cho loại thông báo
     public enum NotificationType {
-        NEW_APP_REVIEW,     // Admin nhận: có đánh giá mới
-        REVIEW_REPLIED,     // User nhận: admin đã phản hồi
-        NEW_FEEDBACK,       // Admin nhận: có feedback mới
-        FEEDBACK_REPLIED,   // User nhận: admin đã phản hồi feedback
-        BUDGET_WARNING,     // User nhận: ngân sách sắp hết
-        BUDGET_EXCEEDED,    // User nhận: ngân sách vượt hạn mức
-        SYSTEM_ANNOUNCEMENT // Thông báo hệ thống
+        NEW_APP_REVIEW,         // Admin nhận: có đánh giá mới
+        REVIEW_REPLIED,         // User nhận: admin đã phản hồi
+        NEW_FEEDBACK,           // Admin nhận: có feedback mới
+        FEEDBACK_REPLIED,       // User nhận: admin đã phản hồi feedback
+        BUDGET_WARNING,         // User nhận: ngân sách sắp hết
+        BUDGET_EXCEEDED,        // User nhận: ngân sách vượt hạn mức
+        FUND_AUTO_DEPOSIT_SUCCESS,  // User nhận: tự động nạp quỹ thành công
+        FUND_AUTO_DEPOSIT_FAILED,   // User nhận: tự động nạp quỹ thất bại
+        FUND_COMPLETED,         // User nhận: quỹ đã đạt mục tiêu
+        SYSTEM_ANNOUNCEMENT     // Thông báo hệ thống
     }
 
     // Getters & Setters

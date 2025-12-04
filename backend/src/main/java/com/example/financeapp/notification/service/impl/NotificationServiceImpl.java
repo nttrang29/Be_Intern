@@ -190,5 +190,80 @@ public class NotificationServiceImpl implements NotificationService {
         notificationRepository.delete(notification);
         log.info("Đã xóa thông báo ID: {}", notificationId);
     }
+
+    @Override
+    @Transactional
+    public Notification createFundAutoDepositSuccessNotification(
+            Long userId,
+            Long fundId,
+            String fundName,
+            String depositAmount,
+            String newBalance,
+            String currency
+    ) {
+        String title = "✅ Tự động nạp quỹ thành công";
+        String message = String.format(
+                "Hệ thống đã tự động nạp %s %s vào quỹ '%s'. Số dư mới: %s %s",
+                depositAmount, currency, fundName, newBalance, currency
+        );
+
+        return createUserNotification(
+                userId,
+                Notification.NotificationType.FUND_AUTO_DEPOSIT_SUCCESS,
+                title,
+                message,
+                fundId,
+                "FUND"
+        );
+    }
+
+    @Override
+    @Transactional
+    public Notification createFundAutoDepositFailedNotification(
+            Long userId,
+            Long fundId,
+            String fundName,
+            String reason
+    ) {
+        String title = "⚠️ Tự động nạp quỹ thất bại";
+        String message = String.format(
+                "Không thể tự động nạp tiền vào quỹ '%s'. Lý do: %s",
+                fundName, reason
+        );
+
+        return createUserNotification(
+                userId,
+                Notification.NotificationType.FUND_AUTO_DEPOSIT_FAILED,
+                title,
+                message,
+                fundId,
+                "FUND"
+        );
+    }
+
+    @Override
+    @Transactional
+    public Notification createFundCompletedNotification(
+            Long userId,
+            Long fundId,
+            String fundName,
+            String targetAmount,
+            String currency
+    ) {
+        String title = "🎉 Quỹ đã đạt mục tiêu!";
+        String message = String.format(
+                "Chúc mừng! Quỹ '%s' đã hoàn thành mục tiêu %s %s",
+                fundName, targetAmount, currency
+        );
+
+        return createUserNotification(
+                userId,
+                Notification.NotificationType.FUND_COMPLETED,
+                title,
+                message,
+                fundId,
+                "FUND"
+        );
+    }
 }
 
