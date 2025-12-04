@@ -121,6 +121,9 @@ public class Fund {
     @Column(name = "auto_deposit_amount", precision = 20, scale = 8)
     private BigDecimal autoDepositAmount; // Số tiền mỗi lần nạp
 
+    @Column(name = "auto_deposit_start_at")
+    private LocalDateTime autoDepositStartAt; // Thời điểm bắt đầu chạy auto-deposit
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -227,6 +230,9 @@ public class Fund {
 
     public BigDecimal getAutoDepositAmount() { return autoDepositAmount; }
     public void setAutoDepositAmount(BigDecimal autoDepositAmount) { this.autoDepositAmount = autoDepositAmount; }
+
+    public LocalDateTime getAutoDepositStartAt() { return autoDepositStartAt; }
+    public void setAutoDepositStartAt(LocalDateTime autoDepositStartAt) { this.autoDepositStartAt = autoDepositStartAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

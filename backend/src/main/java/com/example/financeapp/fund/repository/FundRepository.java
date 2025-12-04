@@ -186,15 +186,17 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.autoDepositEnabled = true
-          AND f.autoDepositScheduleType = 'DAILY'
-          AND f.status = 'ACTIVE'
-          AND f.autoDepositTime <= :currentTime
-          AND f.autoDepositTime >= :startTime
+                WHERE f.autoDepositEnabled = true
+                    AND f.autoDepositScheduleType = 'DAILY'
+                    AND f.status = 'ACTIVE'
+                    AND f.autoDepositTime <= :currentTime
+                    AND f.autoDepositTime >= :startTime
+                    AND (f.autoDepositStartAt IS NULL OR f.autoDepositStartAt <= :currentDateTime)
         """)
     List<Fund> findDailyAutoDeposits(
-        @Param("startTime") java.time.LocalTime startTime,
-        @Param("currentTime") java.time.LocalTime currentTime
+                @Param("startTime") java.time.LocalTime startTime,
+                @Param("currentTime") java.time.LocalTime currentTime,
+                @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
 
     /**
@@ -205,17 +207,19 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.autoDepositEnabled = true
-          AND f.autoDepositScheduleType = 'WEEKLY'
-          AND f.status = 'ACTIVE'
-          AND f.autoDepositDayOfWeek = :dayOfWeek
-          AND f.autoDepositTime <= :currentTime
-          AND f.autoDepositTime >= :startTime
+                WHERE f.autoDepositEnabled = true
+                    AND f.autoDepositScheduleType = 'WEEKLY'
+                    AND f.status = 'ACTIVE'
+                    AND f.autoDepositDayOfWeek = :dayOfWeek
+                    AND f.autoDepositTime <= :currentTime
+                    AND f.autoDepositTime >= :startTime
+                    AND (f.autoDepositStartAt IS NULL OR f.autoDepositStartAt <= :currentDateTime)
         """)
     List<Fund> findWeeklyAutoDeposits(
         @Param("dayOfWeek") Integer dayOfWeek,
-        @Param("startTime") java.time.LocalTime startTime,
-        @Param("currentTime") java.time.LocalTime currentTime
+                @Param("startTime") java.time.LocalTime startTime,
+                @Param("currentTime") java.time.LocalTime currentTime,
+                @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
 
     /**
@@ -226,17 +230,19 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.autoDepositEnabled = true
-          AND f.autoDepositScheduleType = 'MONTHLY'
-          AND f.status = 'ACTIVE'
-          AND f.autoDepositDayOfMonth = :dayOfMonth
-          AND f.autoDepositTime <= :currentTime
-          AND f.autoDepositTime >= :startTime
+                WHERE f.autoDepositEnabled = true
+                    AND f.autoDepositScheduleType = 'MONTHLY'
+                    AND f.status = 'ACTIVE'
+                    AND f.autoDepositDayOfMonth = :dayOfMonth
+                    AND f.autoDepositTime <= :currentTime
+                    AND f.autoDepositTime >= :startTime
+                    AND (f.autoDepositStartAt IS NULL OR f.autoDepositStartAt <= :currentDateTime)
         """)
     List<Fund> findMonthlyAutoDeposits(
         @Param("dayOfMonth") Integer dayOfMonth,
-        @Param("startTime") java.time.LocalTime startTime,
-        @Param("currentTime") java.time.LocalTime currentTime
+                @Param("startTime") java.time.LocalTime startTime,
+                @Param("currentTime") java.time.LocalTime currentTime,
+                @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
 }
 

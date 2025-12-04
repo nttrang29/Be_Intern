@@ -4,6 +4,7 @@ import com.example.financeapp.fund.entity.FundFrequency;
 import com.example.financeapp.fund.entity.ReminderType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -36,6 +37,7 @@ public class UpdateFundRequest {
     private Integer autoDepositMonth;
     private Integer autoDepositDay;
     private BigDecimal autoDepositAmount;
+    private LocalDateTime autoDepositStartAt;
     
     // Thành viên (cho quỹ nhóm)
     private List<FundMemberRequest> members;
@@ -114,6 +116,9 @@ public class UpdateFundRequest {
 
     public BigDecimal getAutoDepositAmount() { return autoDepositAmount; }
     public void setAutoDepositAmount(BigDecimal autoDepositAmount) { this.autoDepositAmount = autoDepositAmount; }
+
+    public LocalDateTime getAutoDepositStartAt() { return autoDepositStartAt; }
+    public void setAutoDepositStartAt(LocalDateTime autoDepositStartAt) { this.autoDepositStartAt = autoDepositStartAt; }
 
     public List<FundMemberRequest> getMembers() { return members; }
     public void setMembers(List<FundMemberRequest> members) { this.members = members; }
