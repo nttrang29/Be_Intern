@@ -54,6 +54,7 @@ public class FundResponse {
     private Integer autoDepositMonth;
     private Integer autoDepositDay;
     private BigDecimal autoDepositAmount;
+    private LocalDateTime autoDepositStartAt;
     
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -119,6 +120,7 @@ public class FundResponse {
         response.setAutoDepositMonth(fund.getAutoDepositMonth());
         response.setAutoDepositDay(fund.getAutoDepositDay());
         response.setAutoDepositAmount(fund.getAutoDepositAmount());
+        response.setAutoDepositStartAt(fund.getAutoDepositStartAt());
         
         response.setCreatedAt(fund.getCreatedAt());
         response.setUpdatedAt(fund.getUpdatedAt());
@@ -237,6 +239,9 @@ public class FundResponse {
 
     public BigDecimal getAutoDepositAmount() { return autoDepositAmount; }
     public void setAutoDepositAmount(BigDecimal autoDepositAmount) { this.autoDepositAmount = autoDepositAmount; }
+
+    public LocalDateTime getAutoDepositStartAt() { return autoDepositStartAt; }
+    public void setAutoDepositStartAt(LocalDateTime autoDepositStartAt) { this.autoDepositStartAt = autoDepositStartAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

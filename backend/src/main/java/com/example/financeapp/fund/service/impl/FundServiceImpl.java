@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -44,6 +46,9 @@ public class FundServiceImpl implements FundService {
 
     @Autowired
     private WalletService walletService;
+
+    @Autowired
+    private com.example.financeapp.wallet.repository.WalletTransferRepository walletTransferRepository;
 
     @Override
     @Transactional
@@ -130,9 +135,15 @@ public class FundServiceImpl implements FundService {
             fund.setAutoDepositMonth(request.getAutoDepositMonth());
             fund.setAutoDepositDay(request.getAutoDepositDay());
             fund.setAutoDepositAmount(request.getAutoDepositAmount());
+            fund.setAutoDepositStartAt(resolveAutoDepositStartAt(
+                    request.getAutoDepositStartAt(),
+                    request.getAutoDepositTime(),
+                    request.getStartDate()
+            ));
             // autoDepositType không còn cần thiết vì chỉ có 1 mode
         } else {
             fund.setAutoDepositEnabled(false);
+            fund.setAutoDepositStartAt(null);
         }
 
         fund = fundRepository.save(fund);
@@ -298,6 +309,15 @@ public class FundServiceImpl implements FundService {
                 fund.setAutoDepositMonth(request.getAutoDepositMonth());
                 fund.setAutoDepositDay(request.getAutoDepositDay());
                 fund.setAutoDepositAmount(request.getAutoDepositAmount());
+                if (request.getAutoDepositStartAt() != null) {
+                    fund.setAutoDepositStartAt(request.getAutoDepositStartAt());
+                } else if (fund.getAutoDepositStartAt() == null) {
+                    fund.setAutoDepositStartAt(resolveAutoDepositStartAt(
+                            null,
+                            request.getAutoDepositTime(),
+                            fund.getStartDate()
+                    ));
+                }
                 // Note: sourceWallet không thể thay đổi sau khi tạo quỹ
             }
         }
@@ -307,6 +327,7 @@ public class FundServiceImpl implements FundService {
             // Logic cập nhật thành viên sẽ được xử lý riêng
             // Ở đây chỉ validate
         }
+                fund.setAutoDepositStartAt(null);
 
         fund = fundRepository.save(fund);
         return buildFundResponse(fund);
@@ -378,6 +399,10 @@ public class FundServiceImpl implements FundService {
             throw new RuntimeException("Số dư ví nguồn không đủ để nạp số tiền này vào quỹ");
         }
 
+        // Lưu số dư trước khi thay đổi để ghi lịch sử transfer
+        java.math.BigDecimal sourceBefore = sourceWallet.getBalance();
+        java.math.BigDecimal targetBefore = targetWallet.getBalance();
+
         // Trừ ví nguồn, cộng ví đích
         sourceWallet.setBalance(sourceWallet.getBalance().subtract(amount));
         targetWallet.setBalance(targetWallet.getBalance().add(amount));
@@ -396,6 +421,29 @@ public class FundServiceImpl implements FundService {
         }
 
         fund = fundRepository.save(fund);
+
+        // Tạo bản ghi WalletTransfer để hiển thị trong lịch sử chuyển khoản
+        try {
+            com.example.financeapp.wallet.entity.WalletTransfer transfer = new com.example.financeapp.wallet.entity.WalletTransfer();
+            transfer.setFromWallet(sourceWallet);
+            transfer.setToWallet(targetWallet);
+            transfer.setAmount(amount);
+            transfer.setCurrencyCode(sourceWallet.getCurrencyCode());
+            transfer.setUser(fund.getOwner());
+            transfer.setNote("Nạp vào quỹ: " + fund.getFundName());
+            transfer.setTransferDate(java.time.LocalDateTime.now());
+            transfer.setStatus(com.example.financeapp.wallet.entity.WalletTransfer.TransferStatus.COMPLETED);
+            transfer.setFromBalanceBefore(sourceBefore);
+            transfer.setFromBalanceAfter(sourceWallet.getBalance());
+            transfer.setToBalanceBefore(targetBefore);
+            transfer.setToBalanceAfter(targetWallet.getBalance());
+
+            walletTransferRepository.save(transfer);
+        } catch (Exception ex) {
+            // Không block flow nếu ghi lịch sử thất bại; chỉ log
+            System.err.println("Không thể ghi WalletTransfer sau khi nạp quỹ: " + ex.getMessage());
+        }
+
         return buildFundResponse(fund);
     }
 
@@ -405,9 +453,11 @@ public class FundServiceImpl implements FundService {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
 
-        // Chỉ quỹ không kỳ hạn mới được rút
+        // Nếu quỹ có kỳ hạn: chỉ cho rút khi đã hoàn thành (COMPLETED)
         if (fund.getHasDeadline()) {
-            throw new RuntimeException("Chỉ quỹ không kỳ hạn mới được rút tiền");
+            if (fund.getStatus() != FundStatus.COMPLETED) {
+                throw new RuntimeException("Quỹ có kỳ hạn chưa hoàn thành, không thể rút tiền");
+            }
         }
 
         // Kiểm tra quyền
@@ -423,14 +473,53 @@ public class FundServiceImpl implements FundService {
             throw new RuntimeException("Số tiền trong quỹ không đủ để rút");
         }
 
+        // Kiểm tra số tiền hợp lệ
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Số tiền rút phải lớn hơn 0");
+        }
+
+        if (fund.getCurrentAmount().compareTo(amount) < 0) {
+            throw new RuntimeException("Số tiền trong quỹ không đủ để rút");
+        }
+
+        // Lấy ví đích với lock
+        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
+
+        if (targetWallet.getBalance().compareTo(amount) < 0) {
+            throw new RuntimeException("Số dư ví quỹ không đủ để rút số tiền này");
+        }
+
+        // Nếu đây là quỹ có kỳ hạn (đã hoàn thành), chuyển tiền về ví nguồn
+        if (Boolean.TRUE.equals(fund.getHasDeadline())) {
+            Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
+                    .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+
+            // Kiểm tra quyền trên ví nguồn (dù chủ quỹ thường là chủ ví nguồn)
+            if (!walletService.hasAccess(sourceWallet.getWalletId(), userId)) {
+                throw new RuntimeException("Bạn không có quyền truy cập ví nguồn của quỹ");
+            }
+
+            // Chuyển tiền: trừ ví quỹ, cộng ví nguồn
+            targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
+            sourceWallet.setBalance(sourceWallet.getBalance().add(amount));
+
+            walletRepository.save(targetWallet);
+            walletRepository.save(sourceWallet);
+
+        } else {
+            // Quỹ không kỳ hạn: giữ nguyên hành vi cũ — chỉ trừ ví quỹ
+            targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
+            walletRepository.save(targetWallet);
+        }
+
         // Trừ số tiền quỹ
         fund.setCurrentAmount(fund.getCurrentAmount().subtract(amount));
 
-        // Trừ số dư ví đích
-        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
-                .orElseThrow(() -> new RuntimeException("Ví đích không tồn tại"));
-        targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
-        walletRepository.save(targetWallet);
+        // Nếu quỹ còn 0, đóng quỹ
+        if (fund.getCurrentAmount().compareTo(BigDecimal.ZERO) == 0) {
+            fund.setStatus(FundStatus.CLOSED);
+        }
 
         fund = fundRepository.save(fund);
         return buildFundResponse(fund);
@@ -585,6 +674,16 @@ public class FundServiceImpl implements FundService {
                 throw new RuntimeException("Số tiền mỗi lần nạp phải lớn hơn 0");
             }
         }
+    }
+
+    private LocalDateTime resolveAutoDepositStartAt(LocalDateTime requestedStartAt, LocalTime autoTime, LocalDate fallbackDate) {
+        if (requestedStartAt != null) {
+            return requestedStartAt;
+        }
+
+        LocalDate startDate = fallbackDate != null ? fallbackDate : LocalDate.now();
+        LocalTime startTime = autoTime != null ? autoTime : LocalTime.now();
+        return LocalDateTime.of(startDate, startTime);
     }
 
     private void validateReminderFields(com.example.financeapp.fund.entity.ReminderType reminderType, CreateFundRequest request) {

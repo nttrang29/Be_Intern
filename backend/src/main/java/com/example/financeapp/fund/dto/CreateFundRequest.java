@@ -7,6 +7,7 @@ import com.example.financeapp.fund.entity.ReminderType;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -56,6 +57,7 @@ public class CreateFundRequest {
     private Integer autoDepositMonth;
     private Integer autoDepositDay;
     private BigDecimal autoDepositAmount; // Số tiền tự động nạp mỗi lần
+    private LocalDateTime autoDepositStartAt; // Thời điểm bắt đầu nạp tự động
 
     private String note;
 
@@ -149,6 +151,9 @@ public class CreateFundRequest {
 
     public BigDecimal getAutoDepositAmount() { return autoDepositAmount; }
     public void setAutoDepositAmount(BigDecimal autoDepositAmount) { this.autoDepositAmount = autoDepositAmount; }
+
+    public LocalDateTime getAutoDepositStartAt() { return autoDepositStartAt; }
+    public void setAutoDepositStartAt(LocalDateTime autoDepositStartAt) { this.autoDepositStartAt = autoDepositStartAt; }
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }

@@ -1,6 +1,8 @@
 package com.example.financeapp.fund.scheduler;
 
 import com.example.financeapp.email.EmailService;
+import com.example.financeapp.notification.service.NotificationService;
+import com.example.financeapp.wallet.repository.WalletTransferRepository;
 import com.example.financeapp.fund.entity.Fund;
 import com.example.financeapp.fund.repository.FundRepository;
 import com.example.financeapp.fund.service.FundService;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +38,12 @@ public class FundAutoDepositScheduler {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private WalletTransferRepository walletTransferRepository;
+
     /**
      * Chạy mỗi phút để kiểm tra và thực hiện tự động nạp tiền
      * Cron: 0 * * * * * (mỗi phút)
@@ -43,8 +52,9 @@ public class FundAutoDepositScheduler {
     public void executeAutoDeposits() {
         log.debug("Bắt đầu kiểm tra tự động nạp quỹ...");
 
-        LocalTime currentTime = LocalTime.now();
-        LocalDate today = LocalDate.now();
+        LocalDateTime currentDateTime = LocalDateTime.now();
+        LocalTime currentTime = currentDateTime.toLocalTime();
+        LocalDate today = currentDateTime.toLocalDate();
 
         // Khoảng thời gian kiểm tra: từ 1 phút trước đến bây giờ
         LocalTime startTime = currentTime.minusMinutes(1);
@@ -52,19 +62,19 @@ public class FundAutoDepositScheduler {
         List<Fund> fundsToDeposit = new ArrayList<>();
 
         // 1. Tìm quỹ tự động nạp DAILY
-        List<Fund> dailyDeposits = fundRepository.findDailyAutoDeposits(startTime, currentTime);
+        List<Fund> dailyDeposits = fundRepository.findDailyAutoDeposits(startTime, currentTime, currentDateTime);
         fundsToDeposit.addAll(dailyDeposits);
         log.debug("Tìm thấy {} quỹ cần tự động nạp DAILY", dailyDeposits.size());
 
         // 2. Tìm quỹ tự động nạp WEEKLY
         int dayOfWeek = today.getDayOfWeek().getValue(); // 1=Monday, 7=Sunday
-        List<Fund> weeklyDeposits = fundRepository.findWeeklyAutoDeposits(dayOfWeek, startTime, currentTime);
+        List<Fund> weeklyDeposits = fundRepository.findWeeklyAutoDeposits(dayOfWeek, startTime, currentTime, currentDateTime);
         fundsToDeposit.addAll(weeklyDeposits);
         log.debug("Tìm thấy {} quỹ cần tự động nạp WEEKLY (thứ {})", weeklyDeposits.size(), dayOfWeek);
 
         // 3. Tìm quỹ tự động nạp MONTHLY
         int dayOfMonth = today.getDayOfMonth();
-        List<Fund> monthlyDeposits = fundRepository.findMonthlyAutoDeposits(dayOfMonth, startTime, currentTime);
+        List<Fund> monthlyDeposits = fundRepository.findMonthlyAutoDeposits(dayOfMonth, startTime, currentTime, currentDateTime);
         fundsToDeposit.addAll(monthlyDeposits);
         log.debug("Tìm thấy {} quỹ cần tự động nạp MONTHLY (ngày {})", monthlyDeposits.size(), dayOfMonth);
 
@@ -88,7 +98,24 @@ public class FundAutoDepositScheduler {
                 log.error("Lỗi khi tự động nạp tiền cho quỹ ID {}: {}",
                         fund.getFundId(), e.getMessage(), e);
 
-                // Gửi email thông báo lỗi
+                // Tạo notification trong hệ thống (chuông topbar)
+                try {
+                        String title = "Tự động nạp thất bại: " + fund.getFundName();
+                        String message = "Nạp tự động vào quỹ '" + fund.getFundName() + "' thất bại: " + e.getMessage()
+                            + ". Vui lòng nạp thêm tiền vào ví nguồn để tiếp tục giao dịch tự động.";
+                    notificationService.createUserNotification(
+                            fund.getOwner().getUserId(),
+                            com.example.financeapp.notification.entity.Notification.NotificationType.SYSTEM_ANNOUNCEMENT,
+                            title,
+                            message,
+                            fund.getFundId(),
+                            "FUND_AUTO_DEPOSIT_FAILED"
+                    );
+                } catch (Exception notifErr) {
+                    log.error("Lỗi khi tạo notification auto-deposit failed: {}", notifErr.getMessage());
+                }
+
+                // Gửi email cảnh báo thất bại
                 try {
                     emailService.sendAutoDepositFailedEmail(
                             fund.getOwner().getEmail(),
@@ -96,8 +123,34 @@ public class FundAutoDepositScheduler {
                             fund.getFundName(),
                             e.getMessage()
                     );
-                } catch (Exception emailError) {
-                    log.error("Lỗi khi gửi email auto-deposit failed: {}", emailError.getMessage());
+                } catch (Exception emailErr) {
+                    log.error("Lỗi khi gửi email auto-deposit failed: {}", emailErr.getMessage());
+                }
+
+                // Ghi một WalletTransfer với trạng thái CANCELLED để hiển thị lịch sử thất bại
+                try {
+                    var sourceWallet = fund.getSourceWallet();
+                    var targetWallet = fund.getTargetWallet();
+                    com.example.financeapp.wallet.entity.WalletTransfer cancelled = new com.example.financeapp.wallet.entity.WalletTransfer();
+                    cancelled.setFromWallet(sourceWallet);
+                    cancelled.setToWallet(targetWallet);
+                    cancelled.setAmount(fund.getAutoDepositAmount() != null ? fund.getAutoDepositAmount() : java.math.BigDecimal.ZERO);
+                    cancelled.setCurrencyCode(sourceWallet != null ? sourceWallet.getCurrencyCode() : null);
+                    cancelled.setUser(fund.getOwner());
+                    cancelled.setNote("Cố gắng nạp tự động thất bại: " + e.getMessage());
+                    cancelled.setTransferDate(java.time.LocalDateTime.now());
+                    cancelled.setStatus(com.example.financeapp.wallet.entity.WalletTransfer.TransferStatus.CANCELLED);
+                    if (sourceWallet != null) {
+                        cancelled.setFromBalanceBefore(sourceWallet.getBalance());
+                        cancelled.setFromBalanceAfter(sourceWallet.getBalance());
+                    }
+                    if (targetWallet != null) {
+                        cancelled.setToBalanceBefore(targetWallet.getBalance());
+                        cancelled.setToBalanceAfter(targetWallet.getBalance());
+                    }
+                    walletTransferRepository.save(cancelled);
+                } catch (Exception txErr) {
+                    log.error("Lỗi khi ghi WalletTransfer cancelled: {}", txErr.getMessage());
                 }
             }
         }
@@ -147,8 +200,7 @@ public class FundAutoDepositScheduler {
                 fund.getFundName(),
                 fund.getFundId(),
                 sourceWallet.getWalletName());
-
-        // Gửi email thông báo
+        // Gửi email thông báo (nếu cấu hình) và tạo notification trong hệ thống
         try {
             emailService.sendAutoDepositSuccessEmail(
                     fund.getOwner().getEmail(),
@@ -161,6 +213,22 @@ public class FundAutoDepositScheduler {
             );
         } catch (Exception e) {
             log.error("Lỗi khi gửi email auto-deposit success: {}", e.getMessage());
+        }
+
+        try {
+            String title = "Nạp tự động thành công: " + fund.getFundName();
+            String message = "Đã tự động nạp " + String.format("%,.0f", amount) + " " + fund.getTargetWallet().getCurrencyCode() +
+                    " vào quỹ '" + fund.getFundName() + "'. Số dư hiện tại: " + String.format("%,.0f", newBalance);
+            notificationService.createUserNotification(
+                    fund.getOwner().getUserId(),
+                    com.example.financeapp.notification.entity.Notification.NotificationType.SYSTEM_ANNOUNCEMENT,
+                    title,
+                    message,
+                    fund.getFundId(),
+                    "FUND_AUTO_DEPOSIT_SUCCESS"
+            );
+        } catch (Exception notifErr) {
+            log.error("Lỗi khi tạo notification auto-deposit success: {}", notifErr.getMessage());
         }
 
         // Kiểm tra nếu đạt mục tiêu thì gửi email chúc mừng
@@ -177,6 +245,21 @@ public class FundAutoDepositScheduler {
                 log.info("Quỹ '{}' (ID: {}) đã đạt mục tiêu!", fund.getFundName(), fund.getFundId());
             } catch (Exception e) {
                 log.error("Lỗi khi gửi email fund completed: {}", e.getMessage());
+            }
+
+            try {
+                String title = "Quỹ đạt mục tiêu: " + fund.getFundName();
+                String message = "Quỹ '" + fund.getFundName() + "' đã đạt mục tiêu " + String.format("%,.0f", fund.getTargetAmount()) + " " + fund.getTargetWallet().getCurrencyCode();
+                notificationService.createUserNotification(
+                        fund.getOwner().getUserId(),
+                        com.example.financeapp.notification.entity.Notification.NotificationType.SYSTEM_ANNOUNCEMENT,
+                        title,
+                        message,
+                        fund.getFundId(),
+                        "FUND_COMPLETED"
+                );
+            } catch (Exception notifErr) {
+                log.error("Lỗi khi tạo notification fund completed: {}", notifErr.getMessage());
             }
         }
     }
