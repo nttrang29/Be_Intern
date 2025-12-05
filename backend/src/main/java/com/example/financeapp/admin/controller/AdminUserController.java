@@ -7,6 +7,10 @@ import com.example.financeapp.log.entity.LoginLog;
 import com.example.financeapp.log.service.LoginLogService;
 import com.example.financeapp.security.CustomUserDetails;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -90,10 +94,18 @@ public class AdminUserController {
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{id}/login-logs")
     public ResponseEntity<List<LoginLogResponse>> getUserLoginLogs(
-            @PathVariable("id") Long userId
+            @PathVariable("id") Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        List<LoginLog> logs = loginLogService.getLogsByUser(userId);
-        List<LoginLogResponse> result = logs.stream()
+        Pageable pageable = PageRequest.of(
+            Math.max(page, 0),
+            clampSize(size),
+            Sort.by(Sort.Direction.DESC, "loginTime")
+        );
+
+        Page<LoginLog> logs = loginLogService.getLogsByUser(userId, pageable);
+        List<LoginLogResponse> result = logs.getContent().stream()
                 .map(LoginLogResponse::fromEntity)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(result);
@@ -108,6 +120,13 @@ public class AdminUserController {
     ) {
         adminUserService.deleteUser(userId, admin);
         return ResponseEntity.noContent().build();
+    }
+
+    private int clampSize(int size) {
+        if (size <= 0) {
+            return 20;
+        }
+        return Math.min(size, 100);
     }
 }
 

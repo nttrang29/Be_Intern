@@ -2,18 +2,28 @@ package com.example.financeapp.auth.controller;
 
 import com.example.financeapp.auth.dto.*;
 import com.example.financeapp.auth.service.AuthService;
+import com.example.financeapp.log.model.LoginAuditEvent;
+import com.example.financeapp.log.model.LoginLogStatus;
 import com.example.financeapp.log.service.LoginLogService;
 import com.example.financeapp.security.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
     private final LoginLogService loginLogService;
@@ -43,18 +53,34 @@ public class AuthController {
             HttpServletRequest servletRequest,
             @Valid @RequestBody LoginRequest request
     ) {
-        // BƯỚC 1: login, lấy về cả token + userId
-        LoginResult result = authService.login(request);
-
-        // BƯỚC 2: lấy IP + User-Agent
-        String ip = servletRequest.getRemoteAddr();
+        String ip = extractClientIp(servletRequest);
         String userAgent = servletRequest.getHeader("User-Agent");
 
-        // BƯỚC 3: lưu nhật ký đăng nhập
-        loginLogService.save(result.getUserId(), ip, userAgent);
+        try {
+            LoginResult result = authService.login(request);
+            recordLoginAttempt(
+                    result.getUserId(),
+                    request.getEmail(),
+                    ip,
+                    userAgent,
+                    LoginLogStatus.SUCCESS,
+                    null,
+                    Collections.singletonMap("provider", "local")
+            );
 
-        // BƯỚC 4: trả token cho FE
-        return ResponseEntity.ok(new AuthTokenResponse(result.getToken()));
+            return ResponseEntity.ok(new AuthTokenResponse(result.getToken()));
+        } catch (RuntimeException ex) {
+            recordLoginAttempt(
+                    null,
+                    request.getEmail(),
+                    ip,
+                    userAgent,
+                    LoginLogStatus.FAILURE,
+                    ex.getMessage(),
+                    Collections.singletonMap("provider", "local")
+            );
+            throw ex;
+        }
     }
 
     // 4) QUÊN MẬT KHẨU – Bước 1: Gửi OTP
@@ -118,16 +144,67 @@ public class AuthController {
             HttpServletRequest servletRequest,
             @Valid @RequestBody GoogleLoginRequest request
     ) {
-        // BƯỚC 1: login Google, lấy userId + token
-        LoginResult result = authService.loginWithGoogle(request);
-
-        // BƯỚC 2: log lại IP + thiết bị
-        String ip = servletRequest.getRemoteAddr();
+        String ip = extractClientIp(servletRequest);
         String userAgent = servletRequest.getHeader("User-Agent");
-        loginLogService.save(result.getUserId(), ip, userAgent);
 
-        // BƯỚC 3: trả token cho FE
-        return ResponseEntity.ok(new AuthTokenResponse(result.getToken()));
+        try {
+            LoginResult result = authService.loginWithGoogle(request);
+            recordLoginAttempt(
+                    result.getUserId(),
+                    null,
+                    ip,
+                    userAgent,
+                    LoginLogStatus.SUCCESS,
+                    null,
+                    Collections.singletonMap("provider", "google")
+            );
+            return ResponseEntity.ok(new AuthTokenResponse(result.getToken()));
+        } catch (RuntimeException ex) {
+            recordLoginAttempt(
+                    null,
+                    null,
+                    ip,
+                    userAgent,
+                    LoginLogStatus.FAILURE,
+                    ex.getMessage(),
+                    Collections.singletonMap("provider", "google")
+            );
+            throw ex;
+        }
+    }
+
+    private void recordLoginAttempt(
+            Long userId,
+            String email,
+            String ip,
+            String userAgent,
+            LoginLogStatus status,
+            String failureReason,
+            Map<String, Object> metadata
+    ) {
+        LoginAuditEvent event = new LoginAuditEvent(
+                userId,
+                email,
+                ip,
+                userAgent,
+                status,
+                null,
+                failureReason,
+                metadata
+        );
+        try {
+            loginLogService.recordEvent(event);
+        } catch (RuntimeException ex) {
+            logger.warn("Không thể ghi nhận login log", ex);
+        }
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     // =============== RESPONSE DTO ===============
