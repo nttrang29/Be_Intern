@@ -1,90 +1,187 @@
 package com.example.financeapp.wallet.service.impl;
 
 import com.example.financeapp.wallet.service.ExchangeRateService;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/**
- * Implementation của ExchangeRateService
- *
- * Version 1.0: Sử dụng tỷ giá cố định (hardcoded)
- * TODO: Tích hợp API lấy tỷ giá real-time (VD: exchangerate-api.com, fixer.io)
- */
 @Service
 public class ExchangeRateServiceImpl implements ExchangeRateService {
 
-    // Tỷ giá cố định (base currency: VND)
-    // Trong production, nên lấy từ API hoặc database
-    private static final Map<String, BigDecimal> EXCHANGE_RATES = new HashMap<>();
+    // Fallback rates (kept for resilience)
+    private static final Map<String, BigDecimal> FALLBACK_RATES = new HashMap<>();
 
     static {
-        // Tỷ giá tham khảo (1 VND = ?)
-        EXCHANGE_RATES.put("VND", BigDecimal.ONE); // 1 VND = 1 VND
-        EXCHANGE_RATES.put("USD", new BigDecimal("0.000041")); // 1 VND = 0.000041 USD
-        EXCHANGE_RATES.put("EUR", new BigDecimal("0.000038")); // 1 VND = 0.000038 EUR
-        EXCHANGE_RATES.put("JPY", new BigDecimal("0.0063")); // 1 VND = 0.0063 JPY
-        EXCHANGE_RATES.put("GBP", new BigDecimal("0.000032")); // 1 VND = 0.000032 GBP
-        EXCHANGE_RATES.put("CNY", new BigDecimal("0.00030")); // 1 VND = 0.0003 CNY
+        FALLBACK_RATES.put("VND", BigDecimal.ONE);
+        FALLBACK_RATES.put("USD", new BigDecimal("0.000041"));
+        FALLBACK_RATES.put("EUR", new BigDecimal("0.000038"));
+        FALLBACK_RATES.put("JPY", new BigDecimal("0.0063"));
+        FALLBACK_RATES.put("GBP", new BigDecimal("0.000032"));
+        FALLBACK_RATES.put("CNY", new BigDecimal("0.00030"));
+    }
 
-        // Hoặc tính theo chiều ngược (1 Currency = ? VND)
-        // USD: 1 USD = 24,350 VND
-        // EUR: 1 EUR = 26,315 VND
-        // JPY: 1 JPY = 158 VND
-        // GBP: 1 GBP = 31,250 VND
-        // CNY: 1 CNY = 3,333 VND
+    private final WebClient webClient;
+    private final String baseUrl;
+    private final long cacheTtlMillis;
+    private final String googleFinanceUrlPattern;
+
+    private static final class CachedRate {
+        final BigDecimal rate;
+        final long ts;
+
+        CachedRate(BigDecimal rate, long ts) {
+            this.rate = rate;
+            this.ts = ts;
+        }
+    }
+
+    private final ConcurrentHashMap<String, CachedRate> cache = new ConcurrentHashMap<>();
+
+    public ExchangeRateServiceImpl(WebClient.Builder webClientBuilder,
+                                   @Value("${app.exchange.base-url:https://api.exchangerate.host/convert}") String baseUrl,
+                                   @Value("${app.exchange.cache-ttl-sec:300}") long cacheTtlSec,
+                                   @Value("${app.exchange.google-finance-url-pattern:https://www.google.com/finance/quote/%s-%s}") String googleFinanceUrlPattern) {
+        this.webClient = webClientBuilder.build();
+        this.baseUrl = baseUrl;
+        this.cacheTtlMillis = cacheTtlSec * 1000L;
+        this.googleFinanceUrlPattern = googleFinanceUrlPattern;
     }
 
     @Override
     public BigDecimal getExchangeRate(String fromCurrency, String toCurrency) {
-        // Validate input
         if (fromCurrency == null || toCurrency == null) {
             throw new RuntimeException("Loại tiền tệ không được null");
         }
 
-        fromCurrency = fromCurrency.toUpperCase();
-        toCurrency = toCurrency.toUpperCase();
+        String from = fromCurrency.toUpperCase();
+        String to = toCurrency.toUpperCase();
 
-        // Nếu cùng currency → tỷ giá = 1
-        if (fromCurrency.equals(toCurrency)) {
+        if (from.equals(to)) {
             return BigDecimal.ONE;
         }
 
-        // Kiểm tra currency có được hỗ trợ không
-        if (!EXCHANGE_RATES.containsKey(fromCurrency)) {
-            throw new RuntimeException("Loại tiền tệ không được hỗ trợ: " + fromCurrency);
+        String key = from + ":" + to;
+        CachedRate cached = cache.get(key);
+        long now = System.currentTimeMillis();
+        if (cached != null && (now - cached.ts) <= cacheTtlMillis) {
+            return cached.rate;
         }
 
-        if (!EXCHANGE_RATES.containsKey(toCurrency)) {
-            throw new RuntimeException("Loại tiền tệ không được hỗ trợ: " + toCurrency);
+        // Special-case: for USD <-> VND prefer Google Finance (user requested)
+        if ((from.equals("USD") && to.equals("VND")) || (from.equals("VND") && to.equals("USD"))) {
+            try {
+                BigDecimal googleRate = fetchFromGoogleFinance(from, to);
+                if (googleRate != null) {
+                    cache.put(key, new CachedRate(googleRate, now));
+                    return googleRate;
+                }
+            } catch (Exception ignored) {
+            }
         }
 
-        // Tính tỷ giá: from → VND → to
-        // VD: USD → VND: 1 USD = ? VND
-        //     1 / rateUSD = 1 / 0.000041 = 24,390.243902439024...
-        // Tối ưu: Tính trực tiếp từ EXCHANGE_RATES để tránh sai số tích lũy
-        // Tỷ giá from → to = EXCHANGE_RATES[to] / EXCHANGE_RATES[from]
-        // VD: USD → EUR = 0.000038 / 0.000041 = 0.926829268292683
+        // Try fetch from external API (exchangerate.host) as primary official source
+        try {
+            String uri = String.format("%s?from=%s&to=%s", baseUrl, from, to);
+            JsonNode root = webClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block(Duration.ofSeconds(5));
 
-        // Trường hợp đặc biệt: Nếu from là VND, tỷ giá = EXCHANGE_RATES[to]
-        if (fromCurrency.equals("VND")) {
-            return EXCHANGE_RATES.get(toCurrency);
+            if (root != null) {
+                JsonNode info = root.path("info");
+                if (info != null && info.has("rate")) {
+                    BigDecimal rate = new BigDecimal(info.path("rate").asText());
+                    cache.put(key, new CachedRate(rate, now));
+                    return rate;
+                }
+                if (root.has("result")) {
+                    BigDecimal rate = new BigDecimal(root.path("result").asText());
+                    cache.put(key, new CachedRate(rate, now));
+                    return rate;
+                }
+            }
+        } catch (Exception e) {
+            // ignore and try fallback sources
         }
 
-        // Trường hợp đặc biệt: Nếu to là VND, tỷ giá = 1 / EXCHANGE_RATES[from]
-        if (toCurrency.equals("VND")) {
-            return BigDecimal.ONE.divide(EXCHANGE_RATES.get(fromCurrency), 12, RoundingMode.HALF_UP);
+        // If API fails, try Google Finance HTML as a last-resort fallback
+        try {
+            BigDecimal googleRate = fetchFromGoogleFinance(from, to);
+            if (googleRate != null) {
+                cache.put(key, new CachedRate(googleRate, now));
+                return googleRate;
+            }
+        } catch (Exception ignored) {
         }
 
-        // Trường hợp chung: from → VND → to
-        // Tỷ giá = EXCHANGE_RATES[to] / EXCHANGE_RATES[from]
-        // Tính trực tiếp để tránh sai số tích lũy từ phép chia 1 / rate
-        BigDecimal fromRate = EXCHANGE_RATES.get(fromCurrency);
-        BigDecimal toRate = EXCHANGE_RATES.get(toCurrency);
-        return toRate.divide(fromRate, 12, RoundingMode.HALF_UP);
+        // Fallback to internal rates (compute via VND base)
+        if (!FALLBACK_RATES.containsKey(from)) {
+            throw new RuntimeException("Loại tiền tệ không được hỗ trợ: " + from);
+        }
+        if (!FALLBACK_RATES.containsKey(to)) {
+            throw new RuntimeException("Loại tiền tệ không được hỗ trợ: " + to);
+        }
+
+        BigDecimal fromRate = FALLBACK_RATES.get(from);
+        BigDecimal toRate = FALLBACK_RATES.get(to);
+
+        BigDecimal computed;
+        if (from.equals("VND")) {
+            computed = toRate;
+        } else if (to.equals("VND")) {
+            computed = BigDecimal.ONE.divide(fromRate, 12, RoundingMode.HALF_UP);
+        } else {
+            computed = toRate.divide(fromRate, 12, RoundingMode.HALF_UP);
+        }
+
+        cache.put(key, new CachedRate(computed, now));
+        return computed;
+    }
+
+    private BigDecimal fetchFromGoogleFinance(String from, String to) {
+        String url = String.format(googleFinanceUrlPattern, from, to);
+        try {
+            Document doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .timeout(5000)
+                    .get();
+
+            // Common selector used in Google Finance for price display
+            Elements els = doc.select("div.YMlKec.fxKbKc, div[data-last-price], span[class*=YMlKec]");
+            for (Element el : els) {
+                String txt = el.text().replaceAll("[^0-9.,]", "");
+                txt = txt.replaceAll(",", "");
+                if (!txt.isBlank()) {
+                    return new BigDecimal(txt);
+                }
+            }
+
+            // Fallback to scanning page text for a likely numeric value (first large number)
+            Pattern p = Pattern.compile("([0-9]{1,3}(?:[,\\.][0-9]+)+)");
+            Matcher m = p.matcher(doc.text());
+            if (m.find()) {
+                String found = m.group(1).replaceAll(",", "");
+                return new BigDecimal(found);
+            }
+        } catch (Exception e) {
+            // any exception -> return null to trigger next fallback
+        }
+        return null;
     }
 
     @Override
@@ -94,11 +191,6 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
         }
 
         BigDecimal rate = getExchangeRate(fromCurrency, toCurrency);
-
-        // Convert: amount * rate
-        // VD: $20 * 24,350 = 487,000 VND
-        // Sử dụng scale = 8 để giữ độ chính xác cao, tránh mất số tiền nhỏ khi chuyển đổi
-        // Ví dụ: 1 VND = 0.000041 USD, nếu làm tròn về 2 chữ số sẽ thành 0.00 USD
         return amount.multiply(rate).setScale(8, RoundingMode.HALF_UP);
     }
 }

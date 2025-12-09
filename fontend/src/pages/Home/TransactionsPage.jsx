@@ -16,8 +16,11 @@ import { useBudgetData } from "../../contexts/BudgetDataContext";
 import { useCategoryData } from "../../contexts/CategoryDataContext";
 import { useWalletData } from "../../contexts/WalletDataContext";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { transactionAPI } from "../../services/transaction.service";
 import { walletAPI } from "../../services/wallet.service";
+import { API_BASE_URL } from "../../services/api-client";
+import { formatVietnamDateTime } from "../../utils/dateFormat";
 
 // ===== REMOVED MOCK DATA - Now using API =====
 
@@ -27,8 +30,346 @@ const TABS = {
   SCHEDULE: "schedule",
 };
 
+const EXPENSE_TOKENS = [
+  "EXPENSE",
+  "CHI",
+  "SPEND",
+  "OUTFLOW",
+  "DEBIT",
+  "PAYMENT",
+  "WITHDRAW",
+];
+
+const INCOME_TOKENS = [
+  "INCOME",
+  "THU",
+  "INFLOW",
+  "CREDIT",
+  "TOPUP",
+  "DEPOSIT",
+  "RECEIVE",
+  "SALARY",
+  "EARN",
+];
+
+const ensureIsoDateWithTimezone = (rawValue) => {
+  if (!rawValue) return rawValue;
+  if (typeof rawValue !== "string") {
+    return rawValue;
+  }
+
+  let value = rawValue.trim();
+  if (!value) return value;
+
+  if (value.includes(" ")) {
+    value = value.replace(" ", "T");
+  }
+
+  const hasTimePart = /T\d{2}:\d{2}/.test(value);
+  if (!hasTimePart) {
+    return value;
+  }
+
+  const hasSeconds = /T\d{2}:\d{2}:\d{2}/.test(value);
+  if (!hasSeconds) {
+    value = value.replace(/T(\d{2}:\d{2})(?!:)/, "T$1:00");
+  }
+
+  const hasTimezone = /(Z|z|[+\-]\d{2}:?\d{2})$/.test(value);
+  if (!hasTimezone) {
+    value = `${value}Z`;
+  }
+
+  return value;
+};
+
+const normalizeDirectionToken = (value) => {
+  if (value === undefined || value === null) return "";
+  return String(value).trim().toUpperCase();
+};
+
+const matchesToken = (value, candidates) => {
+  if (!value) return false;
+  return candidates.some((token) => value.includes(token));
+};
+
+const resolveTransactionDirection = (tx) => {
+  if (!tx) return "expense";
+  if (tx.isExpense === true || tx.isDebit === true) return "expense";
+  if (tx.isIncome === true || tx.isCredit === true) return "income";
+
+  const directionCandidates = [
+    tx.transactionType,
+    tx.transactionType?.type,
+    tx.transactionType?.typeName,
+    tx.transactionType?.typeKey,
+    tx.transactionType?.code,
+    tx.transactionType?.direction,
+    tx.transactionType?.categoryType,
+    tx.transactionTypeName,
+    tx.transactionTypeLabel,
+    tx.type,
+    tx.typeName,
+    tx.typeCode,
+    tx.transactionKind,
+    tx.transactionFlow,
+    tx.direction,
+    tx.flow,
+    tx.category?.type,
+    tx.category?.categoryType,
+    tx.category?.transactionType,
+    tx.category?.typeName,
+    tx.categoryType,
+    tx.transactionCategory?.type,
+    tx.transactionCategory?.direction,
+  ];
+
+  for (const candidate of directionCandidates) {
+    const normalized = normalizeDirectionToken(candidate);
+    if (!normalized) continue;
+    if (matchesToken(normalized, EXPENSE_TOKENS)) return "expense";
+    if (matchesToken(normalized, INCOME_TOKENS)) return "income";
+  }
+
+  const amount = Number(tx.amount ?? tx.transactionAmount);
+  if (!Number.isNaN(amount) && amount !== 0) {
+    return amount < 0 ? "expense" : "income";
+  }
+
+  return "expense";
+};
+
 const PAGE_SIZE = 10;
 const VIEWER_ROLES = new Set(["VIEW", "VIEWER"]);
+
+const ATTACHMENT_KEYS = [
+  "imageUrl",
+  "imageURL",
+  "imageUri",
+  "image_uri",
+  "imagePath",
+  "image_path",
+  "imageLocation",
+  "imageLink",
+  "imageSrc",
+  "attachmentUrl",
+  "attachmentURL",
+  "attachmentUri",
+  "attachment_uri",
+  "attachmentPath",
+  "attachment_path",
+  "fileUrl",
+  "fileURL",
+  "fileUri",
+  "file_uri",
+  "filePath",
+  "file_path",
+  "documentUrl",
+  "documentURL",
+  "documentUri",
+  "document_uri",
+  "photoUrl",
+  "photoURL",
+  "photoUri",
+  "photo_uri",
+  "mediaUrl",
+  "mediaURL",
+  "mediaUri",
+  "media_uri",
+  "receiptUrl",
+  "receiptURL",
+  "receiptImage",
+  "receiptImageUrl",
+  "receiptImageURL",
+  "proofUrl",
+  "proofURL",
+  "proofImage",
+  "transactionImage",
+  "transactionImageUrl",
+  "transactionImageURL",
+  "downloadUrl",
+  "downloadURL",
+  "fileDownloadUrl",
+  "fileDownloadURL",
+  "contentUrl",
+  "contentURL",
+  "signedUrl",
+  "signedURL",
+  "blobUrl",
+  "blobURL",
+  "previewUrl",
+  "previewURL",
+  "image",
+  "attachment",
+  "file",
+  "media",
+  "photo",
+  "picture",
+];
+
+const ATTACHMENT_HINTS = [
+  "image",
+  "attachment",
+  "receipt",
+  "invoice",
+  "proof",
+  "document",
+  "file",
+  "photo",
+  "picture",
+  "media",
+  "evidence",
+];
+
+const MEDIA_EXTENSION_PATTERN = /\.(png|jpe?g|gif|bmp|webp|svg|heic|heif|tiff?|pdf|jpeg)(?:$|[?#])/i;
+const BASE64_BODY_PATTERN = /^[A-Za-z0-9+/=\s]+$/;
+
+const looksLikeBase64Payload = (value) => {
+  if (!value) return false;
+  const normalized = value.replace(/^base64,/i, "").replace(/\s+/g, "");
+  return normalized.length > 80 && BASE64_BODY_PATTERN.test(normalized);
+};
+
+const convertBase64ToDataUrl = (value) => {
+  if (!value) return "";
+  if (/^data:/i.test(value)) return value;
+  const body = value.replace(/^base64,/i, "").trim();
+  if (!body) return "";
+  return `data:image/jpeg;base64,${body}`;
+};
+
+const looksLikeRelativeMediaPath = (value) => {
+  if (!value) return false;
+  if (/^[.]{0,2}\//.test(value)) return true;
+  if (value.startsWith("/")) return true;
+  if (value.includes("/") || value.includes("\\")) return true;
+  if (MEDIA_EXTENSION_PATTERN.test(value)) return true;
+  if (/^uploads/i.test(value) || /^files/i.test(value) || /^images/i.test(value)) return true;
+  if (value.includes("?")) return true;
+  return false;
+};
+
+const formatAttachmentUrl = (value) => {
+  if (!value) return "";
+  let trimmed = String(value).trim();
+  if (!trimmed) return "";
+  trimmed = trimmed.replace(/\\/g, "/");
+
+  if (/^(data:|blob:)/i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+
+  if (looksLikeBase64Payload(trimmed)) {
+    return convertBase64ToDataUrl(trimmed);
+  }
+
+  if (!looksLikeRelativeMediaPath(trimmed)) {
+    return "";
+  }
+
+  const base = (API_BASE_URL || "").replace(/\/$/, "");
+  if (!base) {
+    return trimmed.startsWith("/") ? trimmed : `/${trimmed}`.replace(/\/+/g, "/");
+  }
+
+  if (trimmed.startsWith("/")) {
+    return `${base}${trimmed}`.replace(/([^:]\/)\/+/g, "$1");
+  }
+  return `${base}/${trimmed}`.replace(/([^:]\/)\/+/g, "$1");
+};
+
+const extractAttachmentValue = (value, depth = 0) => {
+  if (!value || depth > 4) return "";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : "";
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = extractAttachmentValue(item, depth + 1);
+      if (nested) return nested;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    const candidateKeys = [
+      "url",
+      "href",
+      "link",
+      "path",
+      "location",
+      "value",
+      "source",
+      "src",
+      "downloadUrl",
+      "downloadURL",
+      "fileDownloadUrl",
+      "fileDownloadURL",
+      "contentUrl",
+      "contentURL",
+      "signedUrl",
+      "signedURL",
+      "previewUrl",
+      "previewURL",
+    ];
+    for (const key of candidateKeys) {
+      if (key in value) {
+        const nested = extractAttachmentValue(value[key], depth + 1);
+        if (nested) return nested;
+      }
+    }
+  }
+  return "";
+};
+
+const normalizeAttachmentCandidate = (value) => {
+  const resolved = extractAttachmentValue(value);
+  if (!resolved) return "";
+  return formatAttachmentUrl(resolved);
+};
+
+const resolveAttachmentFromTransaction = (tx) => {
+  if (!tx) return "";
+  for (const key of ATTACHMENT_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(tx, key)) {
+      const normalized = normalizeAttachmentCandidate(tx[key]);
+      if (normalized) return normalized;
+    }
+  }
+  const fallbackSources = [tx.media, tx.attachments, tx.files, tx.images];
+  for (const source of fallbackSources) {
+    const normalized = normalizeAttachmentCandidate(source);
+    if (normalized) return normalized;
+  }
+
+  const scanObjectForHints = (obj, depth = 0) => {
+    if (!obj || depth > 5) return "";
+    if (typeof obj === "string") {
+      return formatAttachmentUrl(obj);
+    }
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        const resolved = scanObjectForHints(item, depth + 1);
+        if (resolved) return resolved;
+      }
+      return "";
+    }
+    if (typeof obj === "object") {
+      for (const key of Object.keys(obj)) {
+        const lower = key.toLowerCase();
+        if (ATTACHMENT_HINTS.some((hint) => lower.includes(hint))) {
+          const normalized = normalizeAttachmentCandidate(obj[key]);
+          if (normalized) return normalized;
+        }
+        const nested = scanObjectForHints(obj[key], depth + 1);
+        if (nested) return nested;
+      }
+    }
+    return "";
+  };
+
+  return scanObjectForHints(tx);
+};
 
 const extractListFromResponse = (payload, preferredKey) => {
   if (!payload) return [];
@@ -55,66 +396,6 @@ function toDateObj(str) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Format ngày theo múi giờ Việt Nam (UTC+7)
- * @param {Date|string} date - Date object hoặc date string (ISO format từ API)
- * @returns {string} - Format: "DD/MM/YYYY"
- */
-function formatVietnamDate(date) {
-  if (!date) return "";
-  
-  // Parse date string từ API (thường là ISO string ở UTC)
-  // Không dùng new Date() trực tiếp vì nó sẽ parse theo local timezone
-  // Thay vào đó, parse ISO string và convert sang VN timezone
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else if (typeof date === 'string') {
-    // Nếu là ISO string, parse nó như UTC time
-    d = new Date(date);
-  } else {
-    return "";
-  }
-  
-  if (Number.isNaN(d.getTime())) return "";
-  
-  // Dùng toLocaleString với timezone VN để convert đúng
-  return d.toLocaleDateString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-/**
- * Format giờ theo múi giờ Việt Nam (UTC+7)
- * @param {Date|string} date - Date object hoặc date string (ISO format từ API)
- * @returns {string} - Format: "HH:mm"
- */
-function formatVietnamTime(date) {
-  if (!date) return "";
-  
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else if (typeof date === 'string') {
-    // Parse ISO string như UTC time
-    d = new Date(date);
-  } else {
-    return "";
-  }
-  
-  if (Number.isNaN(d.getTime())) return "";
-  
-  // Dùng toLocaleString với timezone VN để convert đúng
-  return d.toLocaleTimeString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
 
 /**
  * Format số tiền với độ chính xác cao (tối đa 8 chữ số thập phân)
@@ -156,12 +437,113 @@ export default function TransactionsPage() {
   const { budgets, getSpentAmount, getSpentForBudget, updateTransactionsByCategory, updateAllExternalTransactions } = useBudgetData();
   const { expenseCategories, incomeCategories } = useCategoryData();
   const { wallets, loadWallets } = useWalletData();
+  const { currentUser } = useAuth();
   const location = useLocation();
   const [appliedFocusParam, setAppliedFocusParam] = useState("");
   
   // Budget warning state
   const [budgetWarning, setBudgetWarning] = useState(null);
   const [pendingTransaction, setPendingTransaction] = useState(null);
+
+  const currentUserIdentifiers = useMemo(() => {
+    if (!currentUser) {
+      return { id: null, email: "" };
+    }
+    const idCandidates = [
+      currentUser.userId,
+      currentUser.id,
+      currentUser.accountId,
+      currentUser.userID,
+      currentUser.accountID,
+    ];
+    const chosenId = idCandidates.find((val) => val !== null && val !== undefined) ?? null;
+    const emailCandidate =
+      (currentUser.email ||
+        currentUser.userEmail ||
+        currentUser.username ||
+        currentUser.login ||
+        currentUser.accountEmail ||
+        "") + "";
+    return {
+      id: chosenId !== null ? String(chosenId) : null,
+      email: emailCandidate.trim().toLowerCase(),
+    };
+  }, [currentUser]);
+
+  const matchesCurrentUser = useCallback(
+    (entity) => {
+      if (!entity) return false;
+      const { id: userId, email: userEmail } = currentUserIdentifiers;
+      if (!userId && !userEmail) return true;
+
+      const toIdString = (value) => {
+        if (value === null || value === undefined) return null;
+        if (typeof value === "object") {
+          const nestedId =
+            value.userId ??
+            value.id ??
+            value.accountId ??
+            value.ownerId ??
+            value.createdBy ??
+            null;
+          return nestedId === null || nestedId === undefined ? null : String(nestedId);
+        }
+        return String(value);
+      };
+
+      const toEmailString = (value) => {
+        if (!value) return null;
+        return String(value).trim().toLowerCase();
+      };
+
+      const candidateIds = [
+        entity.userId,
+        entity.user_id,
+        entity.createdBy,
+        entity.createdById,
+        entity.creatorId,
+        entity.ownerId,
+        entity.createdByUserId,
+        entity.user?.userId,
+        entity.user?.id,
+        entity.user?.accountId,
+        entity.owner?.id,
+        entity.creator?.id,
+        entity.createdBy?.id,
+        entity.createdBy?.userId,
+        entity.actor?.id,
+      ]
+        .map((val) => toIdString(val))
+        .filter(Boolean);
+
+      if (userId && candidateIds.includes(userId)) {
+        return true;
+      }
+
+      const candidateEmails = [
+        entity.userEmail,
+        entity.createdByEmail,
+        entity.ownerEmail,
+        entity.creatorEmail,
+        entity.actorEmail,
+        entity.user?.email,
+        entity.user?.userEmail,
+        entity.owner?.email,
+        entity.creator?.email,
+        entity.createdBy?.email,
+        entity.actor?.email,
+      ]
+        .map((val) => toEmailString(val))
+        .filter(Boolean);
+
+      if (userEmail && candidateEmails.includes(userEmail)) {
+        return true;
+      }
+
+      return false;
+    },
+    [currentUserIdentifiers]
+  );
 
   const showViewerRestrictionToast = useCallback(() => {
     setToast({ open: true, message: t("transactions.error.viewer_wallet_restricted"), type: "error" });
@@ -202,40 +584,78 @@ export default function TransactionsPage() {
 
   // Helper function to map Transaction entity to frontend format
   const mapTransactionToFrontend = useCallback((tx) => {
-    const walletName = wallets.find(w => w.walletId === tx.wallet?.walletId)?.walletName || tx.wallet?.walletName || "Unknown";
-    const categoryName = tx.category?.categoryName || "Unknown";
-    const typeName = tx.transactionType?.typeName || "";
-    const type = typeName === "Chi tiêu" ? "expense" : "income";
+    if (!tx) return null;
+    const walletName =
+          wallets.find((w) => w.walletId === tx.wallet?.walletId)?.walletName ||
+          tx.wallet?.walletName ||
+          tx.wallet?.name ||
+          tx.walletName ||
+          "Unknown";
+    const categoryName =
+      tx.category?.categoryName ||
+      tx.category?.name ||
+      tx.categoryName ||
+      tx.category ||
+      "Unknown";
+    const type = resolveTransactionDirection(tx);
+
+    const rawDateValue =
+      tx.transactionDate ||
+      tx.transaction_date ||
+      tx.date ||
+      tx.createdAt ||
+      tx.created_at ||
+      new Date().toISOString();
+
+    const dateValue = ensureIsoDateWithTimezone(rawDateValue);
+
+    // Sử dụng amount đã chuyển đổi (nếu có) hoặc amount gốc
+    // Backend trả về amount đã được chuyển đổi theo currency của wallet hiện tại
+    const displayAmount = parseFloat(tx.amount || 0);
     
-    // Dùng created_at từ database thay vì transaction_date
-    // Giữ nguyên date string từ API (ISO format), không convert
-    // Format sẽ được xử lý khi hiển thị bằng formatVietnamDate/Time
-    const dateValue = tx.createdAt || tx.transactionDate || new Date().toISOString();
-    
+    // Currency hiện tại của wallet (sau khi merge)
+    const currentCurrency = tx.wallet?.currencyCode || tx.currencyCode || "VND";
+
     return {
       id: tx.transactionId,
       code: `TX-${String(tx.transactionId).padStart(4, "0")}`,
-      type: type,
-      walletName: walletName,
-      amount: parseFloat(tx.amount || 0),
-      currency: tx.wallet?.currencyCode || "VND",
+      type,
+      walletName,
+      amount: displayAmount,
+      currency: currentCurrency,
       date: dateValue,
       category: categoryName,
       note: tx.note || "",
       creatorCode: `USR${String(tx.user?.userId || 0).padStart(3, "0")}`,
-      attachment: tx.imageUrl || "",
+      attachment: resolveAttachmentFromTransaction(tx),
+      // Lưu thông tin gốc để hiển thị nếu cần
+      originalAmount: tx.originalAmount ? parseFloat(tx.originalAmount) : null,
+      originalCurrency: tx.originalCurrency || null,
+      exchangeRate: tx.exchangeRate ? parseFloat(tx.exchangeRate) : null,
     };
   }, [wallets]);
 
-  // Helper function to map WalletTransfer entity to frontend format
   const mapTransferToFrontend = useCallback((transfer) => {
-    const sourceWalletName = wallets.find(w => w.walletId === transfer.fromWallet?.walletId)?.walletName || transfer.fromWallet?.walletName || "Unknown";
-    const targetWalletName = wallets.find(w => w.walletId === transfer.toWallet?.walletId)?.walletName || transfer.toWallet?.walletName || "Unknown";
-    
-    // Dùng created_at từ database thay vì transfer_date
-    // Giữ nguyên date string từ API (ISO format), không convert
-    const dateValue = transfer.createdAt || transfer.transferDate || new Date().toISOString();
-    
+    if (!transfer) return null;
+    const sourceWalletName =
+      wallets.find((w) => w.walletId === transfer.fromWallet?.walletId)?.walletName ||
+      transfer.fromWallet?.walletName ||
+      "Unknown";
+    const targetWalletName =
+      wallets.find((w) => w.walletId === transfer.toWallet?.walletId)?.walletName ||
+      transfer.toWallet?.walletName ||
+      "Unknown";
+
+    const rawDateValue =
+      transfer.transferDate ||
+      transfer.transfer_date ||
+      transfer.date ||
+      transfer.createdAt ||
+      transfer.created_at ||
+      new Date().toISOString();
+
+    const dateValue = ensureIsoDateWithTimezone(rawDateValue);
+
     return {
       id: transfer.transferId,
       code: `TR-${String(transfer.transferId).padStart(4, "0")}`,
@@ -319,15 +739,19 @@ export default function TransactionsPage() {
 
     try {
       const scoped = await fetchScopedHistory();
-      setExternalTransactions(scoped.external.map(mapTransactionToFrontend));
-      setInternalTransactions(scoped.internal.map(mapTransferToFrontend));
+      const filteredScopedExternal = scoped.external.filter(matchesCurrentUser);
+      const filteredScopedInternal = scoped.internal.filter(matchesCurrentUser);
+      setExternalTransactions(filteredScopedExternal.map(mapTransactionToFrontend));
+      setInternalTransactions(filteredScopedInternal.map(mapTransferToFrontend));
     } catch (scopedError) {
       console.warn("TransactionsPage: scoped history fetch failed, using legacy APIs", scopedError);
       const legacy = await fetchLegacyHistory();
-      setExternalTransactions(legacy.external.map(mapTransactionToFrontend));
-      setInternalTransactions(legacy.internal.map(mapTransferToFrontend));
+      const filteredLegacyExternal = legacy.external.filter(matchesCurrentUser);
+      const filteredLegacyInternal = legacy.internal.filter(matchesCurrentUser);
+      setExternalTransactions(filteredLegacyExternal.map(mapTransactionToFrontend));
+      setInternalTransactions(filteredLegacyInternal.map(mapTransferToFrontend));
     }
-  }, [wallets, mapTransactionToFrontend, mapTransferToFrontend]);
+  }, [wallets, mapTransactionToFrontend, mapTransferToFrontend, matchesCurrentUser]);
 
   const runInitialLoad = useCallback(async () => {
     setLoading(true);
@@ -353,9 +777,19 @@ export default function TransactionsPage() {
     };
     window.addEventListener("storage", handleStorageChange);
 
+    // Refresh transactions sau khi merge wallet
+    const handleWalletMerged = () => {
+      // Delay một chút để đảm bảo backend đã hoàn tất merge
+      setTimeout(() => {
+        runInitialLoad();
+      }, 500);
+    };
+    window.addEventListener("walletMerged", handleWalletMerged);
+
     return () => {
       window.removeEventListener("userChanged", handleUserChange);
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("walletMerged", handleWalletMerged);
     };
   }, [runInitialLoad]);
 
@@ -409,8 +843,77 @@ export default function TransactionsPage() {
     setActiveTab(value);
     setSearchText("");
   };
+
+  const evaluateBudgetWarning = useCallback((payload, walletEntity) => {
+    if (!payload || !walletEntity) return null;
+    if (!budgets || budgets.length === 0) return null;
+    const normalizedCategory = normalizeBudgetCategoryKey(payload.category);
+    if (!normalizedCategory) return null;
+
+    const txDate = (() => {
+      if (payload.date) {
+        const parsed = new Date(payload.date);
+        if (!Number.isNaN(parsed.getTime())) {
+          return parsed;
+        }
+      }
+      return new Date();
+    })();
+
+    const orderedBudgets = [...budgets].sort((a, b) => {
+      const aGlobal = a?.walletId === null || a?.walletId === undefined;
+      const bGlobal = b?.walletId === null || b?.walletId === undefined;
+      if (aGlobal === bGlobal) return 0;
+      return aGlobal ? 1 : -1;
+    });
+
+    let alertCandidate = null;
+
+    for (const budget of orderedBudgets) {
+      if (!budget) continue;
+      if ((budget.categoryType || "expense").toLowerCase() !== "expense") continue;
+      const budgetCategory = normalizeBudgetCategoryKey(budget.categoryName);
+      if (!budgetCategory || budgetCategory !== normalizedCategory) continue;
+      if (!isTransactionWithinBudgetPeriod(budget, txDate)) continue;
+      if (!doesBudgetMatchWallet(budget, walletEntity, payload.walletName)) continue;
+
+      const limit = Number(budget.limitAmount || budget.amountLimit || 0);
+      const amount = Number(payload.amount || 0);
+      if (!limit || !amount) continue;
+
+      const spent = Number(getSpentForBudget(budget) || 0);
+      const totalAfterTx = spent + amount;
+      const warnPercent = Number(budget.alertPercentage ?? budget.warningThreshold ?? 80);
+      const warningAmount = limit * (warnPercent / 100);
+      const isExceeding = totalAfterTx > limit;
+      const crossesWarning = !isExceeding && spent < warningAmount && totalAfterTx >= warningAmount;
+
+      if (isExceeding || crossesWarning) {
+        const snapshot = {
+          categoryName: budget.categoryName,
+          walletName: budget.walletName || payload.walletName,
+          budgetLimit: limit,
+          spent,
+          transactionAmount: amount,
+          totalAfterTx,
+          isExceeding,
+        };
+
+        if (isExceeding) {
+          return snapshot;
+        }
+
+        if (!alertCandidate) {
+          alertCandidate = snapshot;
+        }
+      }
+    }
+
+    return alertCandidate;
+  }, [budgets, getSpentForBudget]);
   
-  const handleCreate = async (payload) => {
+  const handleCreate = async (payload, options = {}) => {
+    const skipBudgetCheck = options.skipBudgetCheck === true;
     try {
         if (activeTab === TABS.EXTERNAL) {
         // Find walletId and categoryId
@@ -455,6 +958,15 @@ export default function TransactionsPage() {
           return;
         }
         
+        if (payload.type === "expense" && !skipBudgetCheck) {
+          const warningData = evaluateBudgetWarning(payload, wallet);
+          if (warningData) {
+            setPendingTransaction({ ...payload });
+            setBudgetWarning(warningData);
+            return;
+          }
+        }
+
         const transactionDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString();
 
         // Call API
@@ -524,7 +1036,7 @@ export default function TransactionsPage() {
     if (!pendingTransaction) return;
 
     // Create the transaction anyway by calling handleCreate
-    await handleCreate(pendingTransaction);
+    await handleCreate(pendingTransaction, { skipBudgetCheck: true });
 
     setBudgetWarning(null);
     setPendingTransaction(null);
@@ -1285,6 +1797,7 @@ export default function TransactionsPage() {
       <BudgetWarningModal
         open={!!budgetWarning}
         categoryName={budgetWarning?.categoryName}
+        walletName={budgetWarning?.walletName}
         budgetLimit={budgetWarning?.budgetLimit || 0}
         spent={budgetWarning?.spent || 0}
         transactionAmount={budgetWarning?.transactionAmount || 0}
@@ -1306,18 +1819,6 @@ export default function TransactionsPage() {
   );
 }
 
-function formatVietnamDateTime(date) {
-  if (!date) return "";
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else {
-    d = new Date(date);
-  }
-  if (Number.isNaN(d.getTime())) return "";
-  return `${formatVietnamDate(d)} ${formatVietnamTime(d)}`.trim();
-}
-
 function estimateScheduleRuns(startValue, endValue, scheduleType) {
   if (scheduleType === "ONE_TIME") return 1;
   if (!startValue || !endValue) return 0;
@@ -1337,6 +1838,55 @@ function estimateScheduleRuns(startValue, endValue, scheduleType) {
     default:
       return 0;
   }
+}
+
+function normalizeBudgetCategoryKey(value) {
+  if (!value && value !== 0) return "";
+  return String(value).trim().toLowerCase();
+}
+
+function parseBudgetBoundaryDate(value, isEnd = false) {
+  if (!value) return null;
+  const [datePart] = value.split("T");
+  const [year, month, day] = (datePart || "").split("-");
+  const y = Number(year);
+  const m = Number(month) - 1;
+  const d = Number(day);
+  if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null;
+  const hours = isEnd ? 23 : 0;
+  const minutes = isEnd ? 59 : 0;
+  const seconds = isEnd ? 59 : 0;
+  const ms = isEnd ? 999 : 0;
+  return new Date(y, m, d, hours, minutes, seconds, ms);
+}
+
+function isTransactionWithinBudgetPeriod(budget, txDate) {
+  if (!budget) return false;
+  if (!budget.startDate && !budget.endDate) return true;
+  if (!txDate || Number.isNaN(txDate.getTime())) return false;
+  const start = parseBudgetBoundaryDate(budget.startDate, false);
+  const end = parseBudgetBoundaryDate(budget.endDate, true);
+  if (start && txDate < start) return false;
+  if (end && txDate > end) return false;
+  return true;
+}
+
+function doesBudgetMatchWallet(budget, walletEntity, fallbackWalletName) {
+  if (!budget) return false;
+  if (budget.walletId === null || budget.walletId === undefined) {
+    return true;
+  }
+  const walletId = walletEntity ? (walletEntity.walletId ?? walletEntity.id) : null;
+  if (walletId !== null && walletId !== undefined) {
+    if (Number(budget.walletId) === Number(walletId)) {
+      return true;
+    }
+  }
+  const budgetWalletName = normalizeBudgetCategoryKey(budget.walletName);
+  const walletName = normalizeBudgetCategoryKey(
+    walletEntity?.name || walletEntity?.walletName || fallbackWalletName
+  );
+  return !!budgetWalletName && budgetWalletName === walletName;
 }
 
 const SCHEDULE_TYPE_LABELS = {

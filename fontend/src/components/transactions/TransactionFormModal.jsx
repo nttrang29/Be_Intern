@@ -567,30 +567,26 @@ export default function TransactionFormModal({
 
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <div className="mb-3">
-                        <label className="form-label fw-semibold">{t("transactions.form.wallet")}</label>
-                        <select
-                          className="form-select"
-                          value={form.walletName || ""}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, walletName: e.target.value }))
-                          }
-                          disabled={mode === "edit" || !hasWallets}
-                          required={hasWallets}
-                        >
-                          <option value="">{t("transactions.form.select_option")}</option>
-                          {walletOptions.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                        {!hasWallets && (
-                          <div className="text-muted small mt-1">
-                            {t("transactions.form.no_wallets")}
-                          </div>
-                        )}
-                      </div>
+                      <label className="form-label fw-semibold">{t("transactions.form.wallet")}</label>
+                      <select
+                        className="form-select"
+                        value={form.walletName || ""}
+                        onChange={(e) => setForm((f) => ({ ...f, walletName: e.target.value }))}
+                        disabled={!hasWallets}
+                        required={hasWallets}
+                      >
+                        <option value="">{t("transactions.form.select_option")}</option>
+                        {walletOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      {!hasWallets && (
+                        <div className="text-muted small mt-1">
+                          {t("transactions.form.no_wallets")}
+                        </div>
+                      )}
                     </div>
 
                     <div className="col-md-6">
@@ -629,23 +625,6 @@ export default function TransactionFormModal({
                         </div>
                       )}
                     </div>
-
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold">{t("transactions.form.date")}</label>
-                      <input
-                        type="datetime-local"
-                        name="date"
-                        className="form-control"
-                        value={form.date}
-                        readOnly
-                        style={{ backgroundColor: "#f8f9fa", cursor: "not-allowed" }}
-                        required
-                      />
-                      {mode !== "edit" && (
-                        <small className="text-muted">{t("transactions.form.auto_time_note")}</small>
-                      )}
-                    </div>
-
                     <div className="col-md-6">
                       <div className="mb-3">
                         <label className="form-label fw-semibold">{t("transactions.form.category")}</label>
@@ -955,7 +934,7 @@ export default function TransactionFormModal({
                         <div className="small text-muted mt-1">
                         {t("transactions.form.converted_amount")} {" "}
                         <strong>
-                          {formatMoney(convertedAmount, targetWallet?.currency || "VND")}
+                          {formatMoney(convertedAmount, targetWallet?.currency || "VND", targetWallet?.currency === 'USD' ? 8 : undefined)}
                         </strong>
                       </div>
                     )}
@@ -964,7 +943,7 @@ export default function TransactionFormModal({
                         <div className="small text-muted mt-1">
                         {t("transactions.form.exchange_rate_prefix")} 1 {sourceWallet.currency || "VND"} ={" "}
                         {new Intl.NumberFormat("vi-VN", {
-                          maximumFractionDigits: 6,
+                          maximumFractionDigits: 8,
                         }).format(transferRate)}{" "}
                         {targetWallet.currency || "VND"}
                       </div>

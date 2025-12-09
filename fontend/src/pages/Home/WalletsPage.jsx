@@ -17,6 +17,8 @@ import { walletAPI } from "../../services/wallet.service";
 import Toast from "../../components/common/Toast/Toast";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { formatMoney } from "../../utils/formatMoney";
+import { formatVietnamDateTime } from "../../utils/dateFormat";
+import { getExchangeRate } from "../../services/exchange-rate.service";
 
 import "../../styles/pages/WalletsPage.css";
 import "../../styles/components/wallets/WalletList.css";
@@ -239,72 +241,71 @@ const sortWalletsByMode = (walletList = [], sortMode = "default") => {
 };
 
 /**
- * Format ngày theo múi giờ Việt Nam (UTC+7)
- * @param {Date|string} date - Date object hoặc date string (ISO format từ API)
- * @returns {string} - Format: "DD/MM/YYYY"
- */
-function formatVietnamDate(date) {
-  if (!date) return "";
-
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else if (typeof date === "string") {
-    d = new Date(date);
-  } else {
-    return "";
-  }
-
-  if (Number.isNaN(d.getTime())) return "";
-
-  return d.toLocaleDateString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-/**
- * Format giờ theo múi giờ Việt Nam (UTC+7)
- * @param {Date|string} date - Date object hoặc date string (ISO format từ API)
- * @returns {string} - Format: "HH:mm"
- */
-function formatVietnamTime(date) {
-  if (!date) return "";
-
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else if (typeof date === "string") {
-    d = new Date(date);
-  } else {
-    return "";
-  }
-
-  if (Number.isNaN(d.getTime())) return "";
-
-  return d.toLocaleTimeString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-/**
  * Format time label cho giao dịch (ngày giờ chính xác)
  */
+function normalizeTransactionDate(rawInput) {
+  if (!rawInput && rawInput !== 0) {
+    return getVietnamDateTime();
+  }
+
+  if (rawInput instanceof Date) {
+    if (!Number.isNaN(rawInput.getTime())) {
+      return rawInput.toISOString();
+    }
+    return getVietnamDateTime();
+  }
+
+  if (typeof rawInput === "number") {
+    const fromNumber = new Date(rawInput);
+    if (!Number.isNaN(fromNumber.getTime())) {
+      return fromNumber.toISOString();
+    }
+  }
+
+  const rawString = String(rawInput).trim();
+  if (!rawString) {
+    return getVietnamDateTime();
+  }
+
+  const isoWithoutZonePattern = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)?$/;
+  const hasExplicitZone = /(Z|z|[+\-]\d{2}:?\d{2})$/.test(rawString);
+  if (isoWithoutZonePattern.test(rawString) && !hasExplicitZone) {
+    const isoLike = rawString.includes("T") ? rawString : rawString.replace(" ", "T");
+    const appended = `${isoLike}Z`;
+    const utcDate = new Date(appended);
+    if (!Number.isNaN(utcDate.getTime())) {
+      return utcDate.toISOString();
+    }
+  }
+
+  const isoAttempt = new Date(rawString);
+  if (!Number.isNaN(isoAttempt.getTime())) {
+    return isoAttempt.toISOString();
+  }
+
+  const vietnamPattern = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T,]*(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/;
+  const match = rawString.match(vietnamPattern);
+  if (match) {
+    const [, dayStr, monthStr, yearStr, hourStr = "0", minuteStr = "0", secondStr = "0"] = match;
+    const day = Number(dayStr);
+    const month = Number(monthStr) - 1;
+    const year = Number(yearStr);
+    const hour = Number(hourStr);
+    const minute = Number(minuteStr);
+    const second = Number(secondStr);
+    const date = new Date(year, month, day, hour, minute, second);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+
+  return getVietnamDateTime();
+}
+
 function formatTimeLabel(dateString) {
   if (!dateString) return "";
-
-  const transactionDate = new Date(dateString);
-  if (Number.isNaN(transactionDate.getTime())) return "";
-
-  const dateStr = formatVietnamDate(transactionDate);
-  const timeStr = formatVietnamTime(transactionDate);
-
-  return `${dateStr} ${timeStr}`;
+  const normalized = normalizeTransactionDate(dateString);
+  return formatVietnamDateTime(normalized);
 }
 
 const getVietnamDateTime = () => {
@@ -405,6 +406,17 @@ export default function WalletsPage() {
   const [currentUserId, setCurrentUserId] = useState(() => getLocalUserId());
 
   useEffect(() => {
+    // Ensure we have a recent exchange rate cached for conversions
+    // so transfer/merge UIs show consistent rates even if the dashboard widget
+    // is not mounted on this page.
+    (async () => {
+      try {
+        await getExchangeRate();
+      } catch (e) {
+        // ignore errors - we'll fall back to cached/static rates
+      }
+    })();
+
     if (typeof window === "undefined") return;
     const handleUserChange = () => {
       setCurrentUserId(getLocalUserId());
@@ -594,7 +606,6 @@ export default function WalletsPage() {
   const [createShareEmail, setCreateShareEmail] = useState("");
 
   const [editForm, setEditForm] = useState(buildWalletForm());
-  const [editShareEmail, setEditShareEmail] = useState("");
   const [shareWalletLoading, setShareWalletLoading] = useState(false);
   const [selectedSharedOwnerId, setSelectedSharedOwnerId] = useState(null);
   const [selectedSharedOwnerWalletId, setSelectedSharedOwnerWalletId] =
@@ -1012,6 +1023,11 @@ export default function WalletsPage() {
   // non-default wallet appears directly after it (position 1).
   const finalWallets = useMemo(() => {
     const arr = Array.isArray(sortedWallets) ? [...sortedWallets] : [];
+
+    // When user selects an explicit sort mode, respect that order fully
+    if (sortBy !== "default") {
+      return arr;
+    }
     const getCreatedTime = (w) => {
       if (!w) return 0;
       const raw = w.createdAt || w.created_at || w.created || w.timestamp || 0;
@@ -1047,14 +1063,13 @@ export default function WalletsPage() {
     }
 
     return arr;
-  }, [sortedWallets]);
+  }, [sortedWallets, sortBy]);
 
   // Debug: log counts to help diagnose empty shared list (placed after sortedWallets)
   // (debug logging removed)
 
   useEffect(() => {
     setEditForm(buildWalletForm(selectedWallet));
-    setEditShareEmail("");
     setMergeTargetId("");
     setTopupAmount("");
     setTopupNote("");
@@ -1082,15 +1097,18 @@ export default function WalletsPage() {
   // Helper function để tính tỷ giá
   const getRate = (from, to) => {
     if (!from || !to || from === to) return 1;
-    // Prefer using cached exchange rate (vndPerUsd) if available to keep
+    // Prefer using cached exchange rate if available to keep
     // all conversions consistent with the dashboard cache.
     try {
       const cachedRaw = typeof window !== 'undefined' ? localStorage.getItem('exchange_rate_cache') : null;
       const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
-      const vndPerUsd = cached && Number(cached.vndToUsd) ? Number(cached.vndToUsd) : null;
-      if (vndPerUsd) {
-        if (from === 'USD' && to === 'VND') return vndPerUsd;
-        if (from === 'VND' && to === 'USD') return 1 / vndPerUsd;
+      // Cache structure: vndToUsd = how many VND per 1 USD (e.g., 24390)
+      const vndToUsd = cached && cached.vndToUsd ? Number(cached.vndToUsd) : null;
+      const usdToVnd = cached && cached.usdToVnd ? Number(cached.usdToVnd) : null;
+      
+      if ((vndToUsd || usdToVnd) && !Number.isNaN(vndToUsd || usdToVnd)) {
+        if (from === 'USD' && to === 'VND') return vndToUsd || 24390;
+        if (from === 'VND' && to === 'USD') return usdToVnd || (1 / (vndToUsd || 24390));
         // If neither side is USD, fall through to fallback rates below
       }
     } catch (e) {
@@ -1100,7 +1118,7 @@ export default function WalletsPage() {
     // Fallback static rates (used only if cache not available)
     const rates = {
       VND: 1,
-      USD: 0.000041, // 1 VND = 0.000041 USD (fallback)
+      USD: 0.000041, // 1 VND = 0.000041 USD (inverse of 1 USD = 24390 VND)
       EUR: 0.000038,
       JPY: 0.0063,
       GBP: 0.000032,
@@ -1514,13 +1532,6 @@ export default function WalletsPage() {
     setEditForm((prev) => ({ ...prev, [field]: nextValue }));
   };
 
-  const handleAddEditShareEmail = async () => {
-    const result = await shareEmailForSelectedWallet(editShareEmail);
-    if (result?.success) {
-      setEditShareEmail("");
-    }
-  };
-
   const handleSubmitEdit = async (e) => {
     e.preventDefault();
     if (!selectedWallet || !updateWallet) return;
@@ -1702,11 +1713,19 @@ export default function WalletsPage() {
       return;
     }
     try {
+      // Get the target wallet to know its currency for proper conversion tracking
+      const targetWallet = wallets.find(
+        (w) => Number(w.id) === Number(transferTargetId)
+      );
+      const sourceCurrency = selectedWallet.currency || "VND";
+      const targetCurrency = targetWallet?.currency || "VND";
+
       await transferMoney({
         sourceId: selectedWallet.id,
         targetId: Number(transferTargetId),
         amount: amountNum,
         note: transferNote || "",
+        targetCurrencyCode: targetCurrency, // Pass target currency to backend/service
         mode: "this_to_other",
       });
       await loadWallets();
@@ -1804,15 +1823,6 @@ export default function WalletsPage() {
       } else {
         showToast(t('wallets.toast.merged'));
       }
-      try {
-        logActivity({
-          type: "wallet.merge",
-          message: `Gộp ví ${sourceWallet?.name || sourceWallet?.id} vào ${targetWallet?.name || targetWallet?.id}`,
-          data: { sourceId, targetId },
-        });
-      } catch (e) {
-        // ignore logging errors
-      }
       setSelectedId(targetId);
       setActiveDetailTab("view");
     } catch (error) {
@@ -1858,26 +1868,167 @@ export default function WalletsPage() {
   };
 
   // Map transaction từ API sang format cho WalletDetail
-  const mapTransactionForWallet = useCallback((tx, walletId, walletRef = null) => {
-    const typeName = tx.transactionType?.typeName || "";
-    const normalizedType = typeName.toLowerCase();
-    const isExpense = normalizedType.includes("chi") || normalizedType.includes("expense");
-    const amount = parseFloat(tx.amount || 0);
+    const resolveActorName = useCallback((tx) => {
+      const extractFromObject = (obj) => {
+        if (!obj || typeof obj !== "object") return "";
+        return (
+          obj.fullName ||
+          obj.displayName ||
+          obj.name ||
+          obj.username ||
+          obj.email ||
+          (obj.firstName && obj.lastName && `${obj.firstName} ${obj.lastName}`) ||
+          obj.firstName ||
+          obj.lastName ||
+          ""
+        );
+      };
 
-    const categoryName = tx.category?.categoryName || tx.categoryName || "Khác";
-    const note = tx.note || "";
-    let title = categoryName;
-    if (note) {
-      title = `${categoryName}${note ? ` - ${note}` : ""}`;
-    }
+      const candidates = [
+        tx.actorName,
+        tx.createdByName,
+        tx.creatorName,
+        tx.createdBy,
+        tx.creator,
+        tx.updatedByName,
+        tx.performedBy,
+        tx.executorName,
+        tx.userFullName,
+        tx.userName,
+        tx.username,
+        extractFromObject(tx.createdByUser),
+        extractFromObject(tx.creatorUser),
+        extractFromObject(tx.user),
+      ];
 
-    const displayAmount = isExpense ? -Math.abs(amount) : Math.abs(amount);
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        if (typeof candidate === "string") {
+          const trimmed = candidate.trim();
+          if (trimmed.length) return trimmed;
+        } else if (typeof candidate === "object") {
+          const extracted = extractFromObject(candidate);
+          if (extracted.trim().length) return extracted.trim();
+        }
+      }
 
-    const dateValue =
-      tx.createdAt || tx.transactionDate || new Date().toISOString();
+      return "";
+    }, []);
+
+    const detectTransactionDirection = useCallback((tx) => {
+      const normalize = (value) => {
+        if (value === undefined || value === null) return "";
+        if (typeof value === "string") return value.trim().toUpperCase();
+        if (typeof value === "number") return String(value).trim().toUpperCase();
+        if (typeof value === "object") {
+          const nested =
+            value.type ||
+            value.typeName ||
+            value.code ||
+            value.key ||
+            value.name ||
+            value.value ||
+            value.direction;
+          return normalize(nested);
+        }
+        return "";
+      };
+
+      const expenseTokens = [
+        "EXPENSE",
+        "CHI",
+        "OUT",
+        "OUTFLOW",
+        "DEBIT",
+        "WITHDRAW",
+        "SPEND",
+        "PAYMENT",
+      ];
+      const incomeTokens = [
+        "INCOME",
+        "THU",
+        "IN",
+        "INFLOW",
+        "CREDIT",
+        "TOPUP",
+        "DEPOSIT",
+        "RECEIVE",
+        "SALARY",
+      ];
+
+      const checkTokens = (value, tokens) => {
+        if (!value) return false;
+        return tokens.some((token) => value.includes(token));
+      };
+
+      if (tx.isExpense === true || tx.isDebit === true) return "expense";
+      if (tx.isIncome === true || tx.isCredit === true) return "income";
+
+      const directionCandidates = [
+        tx.transactionType,
+        tx.transactionType?.type,
+        tx.transactionType?.typeName,
+        tx.transactionType?.typeKey,
+        tx.transactionType?.code,
+        tx.transactionType?.direction,
+        tx.transactionType?.categoryType,
+        tx.type,
+        tx.typeName,
+        tx.typeCode,
+        tx.transactionKind,
+        tx.direction,
+        tx.flow,
+        tx.transactionFlow,
+        tx.category?.type,
+        tx.category?.categoryType,
+        tx.category?.transactionType,
+        tx.category?.typeName,
+        tx.categoryType,
+        tx.transactionCategory?.type,
+        tx.transactionCategory?.direction,
+      ];
+
+      for (const candidate of directionCandidates) {
+        const normalized = normalize(candidate);
+        if (!normalized) continue;
+        if (checkTokens(normalized, expenseTokens)) return "expense";
+        if (checkTokens(normalized, incomeTokens)) return "income";
+      }
+
+      if (typeof tx.amount === "number") {
+        if (tx.amount < 0) return "expense";
+        if (tx.amount > 0) return "income";
+      }
+
+      return "income";
+    }, []);
+
+    const mapTransactionForWallet = useCallback((tx, walletId, walletRef = null) => {
+      const direction = detectTransactionDirection(tx);
+      const isExpense = direction === "expense";
+      const amount = parseFloat(tx.amount || 0);
+
+      const categoryName = tx.category?.categoryName || tx.categoryName || "Khác";
+      const note = tx.note || "";
+      let title = categoryName;
+      if (note) {
+        title = `${categoryName}${note ? ` - ${note}` : ""}`;
+      }
+
+      const displayAmount = isExpense ? -Math.abs(amount) : Math.abs(amount);
+
+    const rawDateValue =
+      tx.createdAt ||
+      tx.transactionDate ||
+      tx.transaction_at ||
+      tx.transactionDateTime ||
+      tx.date ||
+      tx.time ||
+      tx.createdTime;
+    const dateValue = normalizeTransactionDate(rawDateValue);
     const timeLabel = formatTimeLabel(dateValue);
 
-    const creatorName = tx.user?.fullName || tx.user?.name || tx.user?.email || tx.createdByName || tx.creatorName || (tx.user && (tx.user.username || tx.user.displayName)) || "";
+      const creatorName = resolveActorName(tx);
 
     const walletInfo = tx.wallet || {};
     const fallbackWalletName =
@@ -1931,7 +2082,7 @@ export default function WalletsPage() {
       originalCurrency: tx.originalCurrency || null,
       exchangeRate: tx.exchangeRate ?? tx.appliedExchangeRate ?? null,
     };
-  }, []);
+  }, [detectTransactionDirection, resolveActorName]);
 
   // Map transfer từ API sang format cho WalletDetail
   const mapTransferForWallet = useCallback((transfer, walletId, walletAltId = null) => {
@@ -1965,11 +2116,23 @@ export default function WalletsPage() {
 
     const displayAmount = isFromWallet ? -Math.abs(amount) : Math.abs(amount);
 
-    const dateValue =
-      transfer.createdAt || transfer.transferDate || new Date().toISOString();
+    const rawDateValue =
+      transfer.createdAt ||
+      transfer.transferDate ||
+      transfer.executedAt ||
+      transfer.date ||
+      transfer.time;
+    const dateValue = normalizeTransactionDate(rawDateValue);
     const timeLabel = formatTimeLabel(dateValue);
 
-    const actorName = transfer.user?.fullName || transfer.user?.name || transfer.user?.email || transfer.createdByName || transfer.creatorName || "";
+    const actorName =
+      resolveActorName(transfer) ||
+      transfer.user?.fullName ||
+      transfer.user?.name ||
+      transfer.user?.email ||
+      transfer.createdByName ||
+      transfer.creatorName ||
+      "";
     const transferId = transfer.transferId ?? transfer.id ?? `${walletId || "wallet"}-${dateValue}`;
 
     const currencyCandidates = [
@@ -2004,7 +2167,7 @@ export default function WalletsPage() {
       targetWallet: targetName,
       type: "transfer",
     };
-  }, []);
+  }, [resolveActorName]);
 
   // Fetch transactions cho wallet đang chọn
   useEffect(() => {
@@ -2126,7 +2289,7 @@ export default function WalletsPage() {
 
       {/* STATS */}
       <div className="wallets-page__stats">
-        <div className="budget-metric-card" tabIndex={0} aria-describedby="tooltip-total">
+        <div className="budget-metric-card budget-metric-card--has-toggle" tabIndex={0} aria-describedby="tooltip-total">
           <div className="budget-metric-label">
             {t('wallets.total_balance')}
             <button
@@ -2139,7 +2302,7 @@ export default function WalletsPage() {
               <i className="bi bi-arrow-repeat"></i>
             </button>
           </div>
-          <div className="budget-metric-value">{formatMoney(totalDisplayedValue, totalCurrency || "VND")}</div>
+          <div className="budget-metric-value">{formatMoney(totalDisplayedValue, totalCurrency || "VND", totalCurrency === 'USD' ? 8 : undefined)}</div>
           <div id="tooltip-total" role="tooltip" className="budget-metric-tooltip">
             <strong>Tổng số dư</strong>
             <div className="budget-metric-tooltip__body">
@@ -2151,7 +2314,7 @@ export default function WalletsPage() {
 
         <div className="budget-metric-card budget-metric-card--personal" tabIndex={0} aria-describedby="tooltip-personal">
           <div className="budget-metric-label">{t('wallets.metric.personal_balance')}</div>
-          <div className="budget-metric-value">{formatMoney(personalDisplayedValue, totalCurrency || "VND")}</div>
+          <div className="budget-metric-value">{formatMoney(personalDisplayedValue, totalCurrency || "VND", totalCurrency === 'USD' ? 8 : undefined)}</div>
           <div id="tooltip-personal" role="tooltip" className="budget-metric-tooltip">
             <strong>Ví cá nhân</strong>
             <div className="budget-metric-tooltip__body">Tổng số dư của các ví cá nhân (ví thuộc sở hữu và quản lý trực tiếp bởi bạn).</div>
@@ -2161,7 +2324,7 @@ export default function WalletsPage() {
 
         <div className="budget-metric-card budget-metric-card--group" tabIndex={0} aria-describedby="tooltip-group">
           <div className="budget-metric-label">{t('wallets.metric.group_balance')}</div>
-          <div className="budget-metric-value">{formatMoney(groupDisplayedValue, totalCurrency || "VND")}</div>
+          <div className="budget-metric-value">{formatMoney(groupDisplayedValue, totalCurrency || "VND", totalCurrency === 'USD' ? 8 : undefined)}</div>
           <div id="tooltip-group" role="tooltip" className="budget-metric-tooltip">
             <strong>Ví nhóm</strong>
             <div className="budget-metric-tooltip__body">Tổng số dư của các ví nhóm mà bạn sở hữu hoặc tham gia quản lý. Bao gồm các ví bạn đã chia sẻ cho nhóm.</div>
@@ -2171,7 +2334,7 @@ export default function WalletsPage() {
 
         <div className="budget-metric-card budget-metric-card--shared-with-me" tabIndex={0} aria-describedby="tooltip-shared-with-me">
           <div className="budget-metric-label">{t('wallets.metric.shared_with_me_balance')}</div>
-          <div className="budget-metric-value">{formatMoney(sharedWithMeDisplayedValue, totalCurrency || "VND")}</div>
+          <div className="budget-metric-value">{formatMoney(sharedWithMeDisplayedValue, totalCurrency || "VND", totalCurrency === 'USD' ? 8 : undefined)}</div>
           <div id="tooltip-shared-with-me" role="tooltip" className="budget-metric-tooltip">
             <strong>Được chia sẻ cho tôi</strong>
             <div className="budget-metric-tooltip__body">Tổng số dư các ví mà người khác chia sẻ cho bạn — bạn có thể xem hoặc thao tác theo quyền được cấp.</div>
@@ -2200,17 +2363,23 @@ export default function WalletsPage() {
           onSearchChange={setSearch}
           sortBy={sortBy}
           onSortChange={setSortBy}
-          wallets={finalWallets.map(w => ({
-            ...w,
-            // Merge sharedEmails từ localSharedMap nếu có
-            sharedEmails: [
-              ...(Array.isArray(w.sharedEmails) ? w.sharedEmails : []),
-              ...(Array.isArray(localSharedMap[w.id]) ? localSharedMap[w.id] : [])
-            ].filter((email, index, self) => 
-              email && typeof email === 'string' && email.trim() && 
-              self.indexOf(email) === index
-            )
-          }))}
+          wallets={finalWallets.map((w) => {
+            const ownedByMe = isWalletOwnedByMe(w);
+            const displayIsDefault = !!w.isDefault && ownedByMe && !w.isShared;
+            return {
+              ...w,
+              isDefault: displayIsDefault,
+              displayIsDefault,
+              // Merge sharedEmails từ localSharedMap nếu có
+              sharedEmails: [
+                ...(Array.isArray(w.sharedEmails) ? w.sharedEmails : []),
+                ...(Array.isArray(localSharedMap[w.id]) ? localSharedMap[w.id] : [])
+              ].filter((email, index, self) =>
+                email && typeof email === "string" && email.trim() &&
+                self.indexOf(email) === index
+              )
+            };
+          })}
           selectedId={selectedId}
           onSelectWallet={handleSelectWallet}
           sharedWithMeOwners={sharedWithMeOwnerGroups}
@@ -2254,10 +2423,6 @@ export default function WalletsPage() {
           onSubmitCreate={handleSubmitCreate}
           editForm={editForm}
           onEditFieldChange={handleEditFieldChange}
-          editShareEmail={editShareEmail}
-          setEditShareEmail={setEditShareEmail}
-          onAddEditShareEmail={handleAddEditShareEmail}
-          shareWalletLoading={shareWalletLoading}
           onSubmitEdit={handleSubmitEdit}
           mergeTargetId={mergeTargetId}
           setMergeTargetId={setMergeTargetId}
