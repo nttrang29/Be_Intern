@@ -2,7 +2,9 @@ package com.example.financeapp.fund.service;
 
 import com.example.financeapp.fund.dto.CreateFundRequest;
 import com.example.financeapp.fund.dto.FundResponse;
+import com.example.financeapp.fund.dto.FundTransactionResponse;
 import com.example.financeapp.fund.dto.UpdateFundRequest;
+import com.example.financeapp.fund.entity.FundTransactionType;
 
 import java.util.List;
 
@@ -59,12 +61,22 @@ public interface FundService {
     /**
      * Nạp tiền vào quỹ
      */
-    FundResponse depositToFund(Long userId, Long fundId, java.math.BigDecimal amount);
+    FundResponse depositToFund(Long userId, Long fundId, java.math.BigDecimal amount, FundTransactionType type, String message);
 
     /**
      * Rút tiền từ quỹ (chỉ cho quỹ không kỳ hạn)
      */
     FundResponse withdrawFromFund(Long userId, Long fundId, java.math.BigDecimal amount);
+
+    /**
+     * Thử nạp bù tự động cho các quỹ dùng ví nguồn vừa được nạp tiền
+     */
+    void tryAutoRecoverForWallet(Long walletId);
+
+    /**
+     * Lịch sử giao dịch quỹ (nạp/rút)
+     */
+    List<FundTransactionResponse> getFundTransactions(Long userId, Long fundId, int limit);
 
     /**
      * Kiểm tra ví có đang được sử dụng cho quỹ hoặc ngân sách không

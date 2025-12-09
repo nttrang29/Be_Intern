@@ -2,9 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { getProfile, updateProfile, changePassword } from "../../services/profile.service";
+import { logoutAllDevices } from "../../services/auth.service";
+import { getMyLoginLogs } from "../../services/loginLogApi";
+import { get2FAStatus, setup2FA, enable2FA, disable2FA, change2FA } from "../../services/2fa.service";
 import "../../styles/pages/SettingsPage.css";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useToast } from "../../components/common/Toast/ToastContext";
+import { normalizeUserProfile } from "../../utils/userProfile";
 
 export default function SettingsPage() {
   const [activeKey, setActiveKey] = useState(null);
@@ -14,10 +18,6 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
-  const [defaultCurrency, setDefaultCurrency] = useState(() => {
-    // Lấy từ localStorage hoặc mặc định là VND
-    return localStorage.getItem("defaultCurrency") || "VND";
-  });
   // Move money format state to top-level to avoid hook rules error
   const [moneyFormat, setMoneyFormat] = useState(() => localStorage.getItem("moneyFormat") || "space");
   const [moneyDecimalDigits, setMoneyDecimalDigits] = useState(() => localStorage.getItem("moneyDecimalDigits") || "0");
@@ -27,29 +27,37 @@ export default function SettingsPage() {
   const [selectedTheme, setSelectedTheme] = useState(() => {
     return localStorage.getItem("theme") || "light";
   });
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+  const [loginLogs, setLoginLogs] = useState([]);
+  const [loginLogLoading, setLoginLogLoading] = useState(false);
+  const [loginLogError, setLoginLogError] = useState("");
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
+  const [twoFAHasSecret, setTwoFAHasSecret] = useState(false);
+  const [twoFALoading, setTwoFALoading] = useState(false);
+  const [show2FASetupModal, setShow2FASetupModal] = useState(false);
+  const [twoFASetupCode, setTwoFASetupCode] = useState("");
+  const [twoFASetupError, setTwoFASetupError] = useState("");
+  const [twoFASetupLoading, setTwoFASetupLoading] = useState(false);
+  const [show2FAChangeModal, setShow2FAChangeModal] = useState(false);
+  const [twoFAOldCode, setTwoFAOldCode] = useState("");
+  const [twoFANewCode, setTwoFANewCode] = useState("");
+  const [twoFAConfirmCode, setTwoFAConfirmCode] = useState("");
+  const [twoFAChangeError, setTwoFAChangeError] = useState("");
+  const [twoFAChangeLoading, setTwoFAChangeLoading] = useState(false);
 
   const { t, changeLanguage, language } = useLanguage();
   const { showToast } = useToast();
   const [selectedLang, setSelectedLang] = useState(language || "vi");
 
-  // Refs cho các input fields
-  const fullNameRef = useRef(null);
-  const avatarRef = useRef(null);
-  const oldPasswordRef = useRef(null);
-  const newPasswordRef = useRef(null);
-  const confirmPasswordRef = useRef(null);
-  const currencyRef = useRef(null);
+  const LOGIN_LOG_PAGE_SIZE = 50;
+  const LOGIN_LOG_MAX_PAGES = 20;
 
-  // Load profile khi component mount
-  useEffect(() => {
-    loadProfile();
-    // Load và áp dụng theme khi component mount
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setSelectedTheme(savedTheme);
-    applyTheme(savedTheme);
-  }, []);
+  const toastPosition = {
+    anchorSelector: "body",
+    topbarSelector: ".no-topbar",
+    offset: { top: 12, right: 16 },
+  };
 
-  // Hàm áp dụng theme
   const applyTheme = (theme) => {
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
@@ -58,7 +66,6 @@ export default function SettingsPage() {
       document.documentElement.classList.remove("dark");
       document.body.classList.remove("dark");
     } else if (theme === "system") {
-      // System: theo preference của OS
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       if (prefersDark) {
         document.documentElement.classList.add("dark");
@@ -70,40 +77,104 @@ export default function SettingsPage() {
     }
   };
 
-  // Lắng nghe thay đổi system preference khi theme là "system"
-  useEffect(() => {
-    if (selectedTheme === "system") {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      
-      const handleSystemThemeChange = (e) => {
-        if (selectedTheme === "system") {
-          if (e.matches) {
-            document.documentElement.classList.add("dark");
-            document.body.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-            document.body.classList.remove("dark");
-          }
-        }
-      };
+  // Refs cho các input fields
+  const fullNameRef = useRef(null);
+  const avatarRef = useRef(null);
+  const oldPasswordRef = useRef(null);
+  const newPasswordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
 
-      // Lắng nghe thay đổi
-      if (mediaQuery.addEventListener) {
-        mediaQuery.addEventListener("change", handleSystemThemeChange);
-      } else {
-        // Fallback cho trình duyệt cũ
-        mediaQuery.addListener(handleSystemThemeChange);
-      }
-
-      // Cleanup
-      return () => {
-        if (mediaQuery.removeEventListener) {
-          mediaQuery.removeEventListener("change", handleSystemThemeChange);
-        } else {
-          mediaQuery.removeListener(handleSystemThemeChange);
-        }
-      };
+  const formatLogTime = (log) => {
+    const raw =
+      log?.time ||
+      log?.loginTime ||
+      log?.createdAt ||
+      log?.loginAt ||
+      log?.timestamp;
+    if (!raw) return "--";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+      return typeof raw === "string" ? raw : "--";
     }
+    const locale = selectedLang === "vi" ? "vi-VN" : "en-US";
+    return date.toLocaleString(locale, {
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatLogStatus = (status) => {
+    if (!status) return "--";
+    const str = String(status);
+    const normalized = str.toLowerCase();
+    if (normalized === "success") return t("common.success");
+    if (["failed", "failure", "error"].includes(normalized)) return t("common.error");
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
+
+  const resolveLogDevice = (log) => log?.device || log?.deviceInfo || log?.userAgent || "--";
+  const resolveLogIp = (log) => log?.ipAddress || log?.ip || log?.clientIp || "--";
+  const resolveLogAccount = (log) => {
+    if (log?.account) return log.account;
+    if (log?.accountName && log?.accountEmail) {
+      return `${log.accountName} (${log.accountEmail})`;
+    }
+    if (log?.accountName) return log.accountName;
+    if (log?.accountEmail) return log.accountEmail;
+    if (log?.userEmail) return log.userEmail;
+    if (log?.userName) return log.userName;
+    if (user?.fullName && user?.email) {
+      return `${user.fullName} (${user.email})`;
+    }
+    return user?.email || user?.fullName || "--";
+  };
+
+  // Load profile khi component mount
+  useEffect(() => {
+    loadProfile();
+    fetchLoginLogs();
+    load2FAStatus();
+    // Load và áp dụng theme khi component mount
+    const savedTheme = localStorage.getItem("theme") || "light";
+    setSelectedTheme(savedTheme);
+    applyTheme(savedTheme);
+  }, []);
+
+  // Lắng nghe thay đổi system preference khi chọn mode "system"
+  useEffect(() => {
+    if (selectedTheme !== "system") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const handleSystemThemeChange = (event) => {
+      if (event.matches) {
+        document.documentElement.classList.add("dark");
+        document.body.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.body.classList.remove("dark");
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleSystemThemeChange);
+    } else {
+      mediaQuery.addListener(handleSystemThemeChange);
+    }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", handleSystemThemeChange);
+      } else {
+        mediaQuery.removeListener(handleSystemThemeChange);
+      }
+    };
   }, [selectedTheme]);
 
   const loadProfile = async () => {
@@ -111,7 +182,8 @@ export default function SettingsPage() {
       setLoading(true);
       const { response, data } = await getProfile();
       if (response.ok && data.user) {
-        setUser(data.user);
+        const normalizedUser = normalizeUserProfile(data.user);
+        setUser(normalizedUser);
       } else {
         setError(data.error || t('settings.error.load_profile'));
       }
@@ -119,6 +191,18 @@ export default function SettingsPage() {
       setError(t('settings.error.network_load'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const load2FAStatus = async () => {
+    try {
+      const { response, data } = await get2FAStatus();
+      if (response.ok) {
+        setTwoFAEnabled(data.enabled || false);
+        setTwoFAHasSecret(data.hasSecret || false);
+      }
+    } catch (err) {
+      console.error("Lỗi load 2FA status:", err);
     }
   };
 
@@ -159,6 +243,284 @@ export default function SettingsPage() {
     };
     reader.readAsDataURL(file);
   };
+
+  const fetchLoginLogs = async () => {
+    setLoginLogLoading(true);
+    setLoginLogError("");
+    try {
+      const newLogs = [];
+      const seenKeys = new Set();
+
+      const extractLogs = (payload) => {
+        if (!payload) return [];
+        const candidates = [
+          payload.logs,
+          payload.loginLogs,
+          payload.items,
+          payload.entries,
+          payload.records,
+          payload.results,
+          payload.content,
+          payload.list,
+          payload.rows,
+          payload.data,
+        ];
+        for (const candidate of candidates) {
+          if (Array.isArray(candidate)) return candidate;
+        }
+        if (payload.page && Array.isArray(payload.page.content)) {
+          return payload.page.content;
+        }
+        if (Array.isArray(payload)) return payload;
+        return [];
+      };
+
+      const getTimestamp = (log) => {
+        const raw =
+          log?.time ||
+          log?.loginTime ||
+          log?.createdAt ||
+          log?.loginAt ||
+          log?.timestamp;
+        if (!raw) return 0;
+        const millis = new Date(raw).getTime();
+        return Number.isNaN(millis) ? 0 : millis;
+      };
+
+      const getLogKey = (log) => {
+        if (log?.id != null) return `id:${log.id}`;
+        const ts = getTimestamp(log);
+        const ip = log?.ipAddress || log?.ip || log?.clientIp || "";
+        const device = log?.device || log?.deviceInfo || log?.userAgent || "";
+        return `ts:${ts}|ip:${ip}|device:${device}`;
+      };
+
+      const shouldContinue = (payload, batchLength, currentPage) => {
+        if (!payload) return false;
+        if (typeof payload.hasNext === "boolean") return payload.hasNext;
+        if (typeof payload.nextPage === "number") return true;
+        if (typeof payload.last === "boolean") return payload.last === false;
+        const pageMeta = payload.page || payload.metadata || payload.meta || null;
+        if (pageMeta) {
+          if (typeof pageMeta.hasNext === "boolean") return pageMeta.hasNext;
+          if (typeof pageMeta.last === "boolean") return pageMeta.last === false;
+          if (
+            typeof pageMeta.totalPages === "number" &&
+            typeof pageMeta.number === "number"
+          ) {
+            return pageMeta.number + 1 < pageMeta.totalPages;
+          }
+        }
+        if (
+          typeof payload.totalPages === "number" &&
+          typeof payload.page === "number"
+        ) {
+          return payload.page + 1 < payload.totalPages;
+        }
+        if (
+          typeof payload.total === "number" &&
+          typeof payload.pageSize === "number" &&
+          typeof payload.page === "number"
+        ) {
+          return (payload.page + 1) * payload.pageSize < payload.total;
+        }
+        return batchLength >= LOGIN_LOG_PAGE_SIZE && currentPage + 1 < LOGIN_LOG_MAX_PAGES;
+      };
+
+      let page = 0;
+      let keepFetching = true;
+      while (keepFetching && page < LOGIN_LOG_MAX_PAGES) {
+        const { response, data } = await getMyLoginLogs({
+          page,
+          size: LOGIN_LOG_PAGE_SIZE,
+          limit: LOGIN_LOG_PAGE_SIZE,
+        });
+        if (!response?.ok) {
+          throw new Error(data?.error || t("settings.login_log.error"));
+        }
+        const batch = extractLogs(data);
+        batch.forEach((log) => {
+          const key = getLogKey(log);
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            newLogs.push(log);
+          }
+        });
+        keepFetching = shouldContinue(data, batch.length, page);
+        if (!keepFetching) break;
+        page += 1;
+      }
+
+      newLogs.sort((a, b) => getTimestamp(b) - getTimestamp(a));
+      setLoginLogs(newLogs);
+    } catch (err) {
+      setLoginLogs([]);
+      setLoginLogError(err?.message || t("settings.login_log.error"));
+    } finally {
+      setLoginLogLoading(false);
+    }
+  };
+
+  const handleLogoutAllDevices = async () => {
+    if (logoutAllLoading) return;
+    setLogoutAllLoading(true);
+    try {
+      const { response, data } = await logoutAllDevices();
+      if (response?.ok) {
+        showToast(t("settings.logout_all.success"), {
+          type: "success",
+          ...toastPosition,
+        });
+      } else {
+        showToast(data?.error || t("settings.logout_all.error"), {
+          type: "error",
+          ...toastPosition,
+        });
+      }
+    } catch (error) {
+      showToast(t("settings.logout_all.error"), {
+        type: "error",
+        ...toastPosition,
+      });
+    } finally {
+      setLogoutAllLoading(false);
+    }
+  };
+
+  const handle2FAToggle = async () => {
+    if (twoFALoading) return;
+
+    setTwoFALoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      if (twoFAEnabled) {
+        // Tắt 2FA
+        const { response, data } = await disable2FA();
+        if (response?.ok) {
+          setTwoFAEnabled(false);
+          setSuccess(data.message || "Đã tắt xác thực 2 lớp thành công");
+          showToast(data.message || "Đã tắt xác thực 2 lớp thành công", {
+            type: "success",
+            ...toastPosition,
+          });
+        } else {
+          setError(data?.error || "Không thể tắt xác thực 2 lớp");
+        }
+      } else {
+        // Bật 2FA
+        if (!twoFAHasSecret) {
+          // Chưa có secret, cần setup trước
+          setShow2FASetupModal(true);
+          setTwoFALoading(false);
+          return;
+        }
+
+        // Đã có secret, bật trực tiếp
+        const { response, data } = await enable2FA();
+        if (response?.ok) {
+          setTwoFAEnabled(true);
+          setSuccess(data.message || "Đã bật xác thực 2 lớp thành công");
+          showToast(data.message || "Đã bật xác thực 2 lớp thành công", {
+            type: "success",
+            ...toastPosition,
+          });
+        } else {
+          setError(data?.error || "Không thể bật xác thực 2 lớp");
+        }
+      }
+    } catch (error) {
+      setError("Lỗi kết nối đến server. Vui lòng thử lại sau.");
+    } finally {
+      setTwoFALoading(false);
+    }
+  };
+
+  const handle2FASetup = async () => {
+    if (!twoFASetupCode || twoFASetupCode.length !== 6) {
+      setTwoFASetupError("Vui lòng nhập mã pin 6 số");
+      return;
+    }
+
+    setTwoFASetupLoading(true);
+    setTwoFASetupError("");
+
+    try {
+      // Setup 2FA với mã pin do user tự tạo
+      const { response, data } = await setup2FA(twoFASetupCode);
+      if (response?.ok) {
+        setTwoFAHasSecret(true);
+        setShow2FASetupModal(false);
+        setTwoFASetupCode("");
+        setSuccess(data.message || "Đã tạo mã pin 2FA thành công");
+        showToast(data.message || "Đã tạo mã pin 2FA thành công. .", {
+          type: "success",
+          ...toastPosition,
+        });
+        // Tự động bật 2FA sau khi setup
+        await enable2FA();
+        await load2FAStatus();
+      } else {
+        setTwoFASetupError(data?.error || "Không thể tạo mã pin 2FA");
+      }
+    } catch (error) {
+      setTwoFASetupError("Lỗi kết nối đến server. Vui lòng thử lại sau.");
+    } finally {
+      setTwoFASetupLoading(false);
+    }
+  };
+
+  const handle2FAChange = async () => {
+    if (!twoFAOldCode || twoFAOldCode.length !== 6) {
+      setTwoFAChangeError("Vui lòng nhập mã xác thực cũ");
+      return;
+    }
+
+    if (!twoFANewCode || twoFANewCode.length !== 6) {
+      setTwoFAChangeError("Vui lòng nhập mã xác thực mới");
+      return;
+    }
+
+    if (!twoFAConfirmCode || twoFAConfirmCode.length !== 6) {
+      setTwoFAChangeError("Vui lòng nhập lại mã xác thực mới");
+      return;
+    }
+
+    if (twoFANewCode !== twoFAConfirmCode) {
+      setTwoFAChangeError("Mã xác thực mới và nhập lại không khớp");
+      return;
+    }
+
+    setTwoFAChangeLoading(true);
+    setTwoFAChangeError("");
+
+    try {
+      const { response, data } = await change2FA({
+        oldCode: twoFAOldCode,
+        newCode: twoFANewCode,
+        confirmCode: twoFAConfirmCode
+      });
+
+      if (response?.ok) {
+        setShow2FAChangeModal(false);
+        setTwoFAOldCode("");
+        setTwoFANewCode("");
+        setTwoFAConfirmCode("");
+        setSuccess(data.message || "Đã đổi mã xác thực 2 lớp thành công");
+        showToast(data.message || "Đã đổi mã xác thực 2 lớp thành công", {
+          type: "success",
+          ...toastPosition,
+        });
+      } else {
+        setTwoFAChangeError(data?.error || "Không thể đổi mã xác thực");
+      }
+    } catch (error) {
+      setTwoFAChangeError("Lỗi kết nối đến server. Vui lòng thử lại sau.");
+    } finally {
+      setTwoFAChangeLoading(false);
+    }
+  };
   // Sửa trong file SettingsPage.jsx
 
   const handleUpdateProfile = async () => {
@@ -189,11 +551,12 @@ export default function SettingsPage() {
       });
 
       if (response.ok && data.user) {
+        const normalizedUser = normalizeUserProfile(data.user);
         // 1. Cập nhật state cục bộ (như cũ)
-        setUser(data.user);
+        setUser(normalizedUser);
 
         // 2. ✅ Cập nhật localStorage với user mới nhất từ API
-        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("user", JSON.stringify(normalizedUser));
 
         // 3. ✅ Bắn tín hiệu "storageUpdated" để HomeTopbar cập nhật avatar
         // Sử dụng setTimeout nhỏ để đảm bảo localStorage đã được cập nhật
@@ -411,12 +774,45 @@ export default function SettingsPage() {
 <div className="settings-toggle-row">
 <span>{t('settings.2fa.status_label')}</span>
 <label className="settings-switch">
-<input type="checkbox" />
+<input 
+  type="checkbox" 
+  checked={twoFAEnabled}
+  onChange={handle2FAToggle}
+  disabled={twoFALoading}
+/>
 <span className="settings-switch__slider" />
 </label>
 </div>
 <p className="settings-detail__hint">{t('settings.2fa.hint')}</p>
-<button className="settings-btn settings-btn--primary">{t('settings.2fa.configure')}</button>
+{!twoFAHasSecret && (
+  <button 
+    className="settings-btn settings-btn--primary"
+    onClick={() => setShow2FASetupModal(true)}
+    disabled={twoFALoading}
+  >
+    {t('settings.2fa.configure')}
+  </button>
+)}
+{twoFAHasSecret && twoFAEnabled && (
+  <button 
+    className="settings-btn settings-btn--primary"
+    onClick={() => setShow2FAChangeModal(true)}
+    disabled={twoFALoading}
+    style={{ marginTop: '10px' }}
+  >
+    Đổi mã xác thực
+  </button>
+)}
+{error && activeKey === "2fa" && (
+  <div className="settings-error" style={{color: 'red', marginBottom: '10px', padding: '10px', backgroundColor: '#ffe6e6', borderRadius: '4px'}}>
+    {error}
+  </div>
+)}
+{success && activeKey === "2fa" && (
+  <div className="settings-success" style={{color: 'green', marginBottom: '10px', padding: '10px', backgroundColor: '#e6ffe6', borderRadius: '4px'}}>
+    {success}
+  </div>
+)}
 </div>
 
         );
@@ -427,37 +823,62 @@ export default function SettingsPage() {
 <div className="settings-detail__body">
 <h4>{t('settings.login_log')}</h4>
 <p className="settings-detail__desc">{t('settings.login_log.desc')}</p>
+<div className="settings-detail__actions">
+  <button
+    className="settings-btn"
+    onClick={fetchLoginLogs}
+    disabled={loginLogLoading}
+  >
+    {loginLogLoading ? t('common.loading') : t('settings.login_log.refresh')}
+  </button>
+</div>
+{loginLogError && (
+  <div
+    className="settings-error"
+    style={{
+      color: '#b42318',
+      marginBottom: '10px',
+      padding: '10px',
+      backgroundColor: '#ffe6e6',
+      borderRadius: '4px',
+    }}
+  >
+    {loginLogError}
+  </div>
+)}
 <div className="settings-table__wrap">
-<table className="settings-table">
-<thead>
-<tr>
-<th>Thời gian</th>
-<th>Thiết bị</th>
-<th>Địa chỉ IP</th>
-<th>Trạng thái</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Hôm nay, 09:32</td>
-<td>Chrome • Windows</td>
-<td>192.168.1.10</td>
-<td>Thành công</td>
-</tr>
-<tr>
-<td>Hôm qua, 21:15</td>
-<td>Safari • iOS</td>
-<td>10.0.0.5</td>
-<td>Thành công</td>
-</tr>
-<tr>
-<td>2 ngày trước</td>
-<td>Không xác định</td>
-<td>203.113.12.45</td>
-<td>Nghi vấn</td>
-</tr>
-</tbody>
-</table>
+{loginLogLoading ? (
+  <div className="settings-table__empty">{t('common.loading')}</div>
+) : loginLogs.length ? (
+  <table className="settings-table">
+    <thead>
+      <tr>
+        <th>{t('settings.login_log.col.time')}</th>
+        <th>{t('settings.login_log.col.account')}</th>
+        <th>{t('settings.login_log.col.device')}</th>
+        <th>{t('settings.login_log.col.ip')}</th>
+        <th>{t('settings.login_log.col.status')}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {loginLogs.map((log, index) => (
+        <tr key={log.id || log._id || `${index}-${log?.time || log?.createdAt || log?.timestamp || log?.ipAddress || ''}`}>
+          <td>{formatLogTime(log)}</td>
+          <td>{resolveLogAccount(log)}</td>
+          <td>{resolveLogDevice(log)}</td>
+          <td>{resolveLogIp(log)}</td>
+          <td>
+            <span className={`settings-status-chip settings-status-chip--${(log?.status || '').toString().toLowerCase()}`}>
+              {formatLogStatus(log?.status)}
+            </span>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+) : (
+  <div className="settings-table__empty">{t('settings.login_log.empty')}</div>
+)}
 </div>
 </div>
 
@@ -473,48 +894,18 @@ export default function SettingsPage() {
     <li>{t('settings.logout_all.note1')}</li>
     <li>{t('settings.logout_all.note2')}</li>
   </ul>
-  <button className="settings-btn settings-btn--danger">{t('settings.logout_all.btn')}</button>
+  <button
+    className="settings-btn settings-btn--danger"
+    onClick={handleLogoutAllDevices}
+    disabled={logoutAllLoading}
+  >
+    {logoutAllLoading ? t('common.loading') : t('settings.logout_all.btn')}
+  </button>
 </div>
 
         );
 
       // ====== NHÓM CÀI ĐẶT HỆ THỐNG ======
-
-      case "currency":
-
-        return (
-<div className="settings-detail__body">
-  <h4>{t('settings.currency')}</h4>
-  <p className="settings-detail__desc">{t('settings.currency.desc')}</p>
-  <div className="settings-form__group">
-    <label>{t('settings.currency.label')}</label>
-    <select
-      ref={currencyRef}
-      defaultValue={defaultCurrency}
-      onChange={(e) => setDefaultCurrency(e.target.value)}
-    >
-      <option value="VND">VND - Việt Nam Đồng</option>
-      <option value="USD">USD - Đô la Mỹ</option>
-    </select>
-  </div>
-{error && activeKey === "currency" && <div className="settings-error" style={{color: 'red', marginBottom: '10px', padding: '10px', backgroundColor: '#ffe6e6', borderRadius: '4px'}}>{error}</div>}
-{success && activeKey === "currency" && <div className="settings-success" style={{color: 'green', marginBottom: '10px', padding: '10px', backgroundColor: '#e6ffe6', borderRadius: '4px'}}>{success}</div>}
-            <button 
-              className="settings-btn settings-btn--primary"
-              onClick={() => {
-                const selectedCurrency = currencyRef.current?.value || "VND";
-                localStorage.setItem("defaultCurrency", selectedCurrency);
-                setDefaultCurrency(selectedCurrency);
-                // Bắn event để các component khác cập nhật
-                window.dispatchEvent(new CustomEvent('currencySettingChanged', { detail: { currency: selectedCurrency } }));
-                showToast(t('settings.currency.saved'), { type: 'success', anchorSelector: 'body', topbarSelector: '.no-topbar', offset: { top: 12, right: 16 } });
-              }}
-            >
-              {t('common.save')}
-</button>
-</div>
-
-        );
 
       case "currency-format":
         return (
@@ -729,7 +1120,6 @@ export default function SettingsPage() {
   ];
 
   const systemItems = [
-    { key: "currency", labelKey: "settings.currency" },
     { key: "currency-format", labelKey: "settings.currency_format" },
     { key: "date-format", labelKey: "settings.date_format" },
     { key: "language", labelKey: "settings.language" },
@@ -826,8 +1216,226 @@ export default function SettingsPage() {
 </div>
 </div>
 </div>
-  </div>
 
+      {/* Modal setup 2FA */}
+      {show2FASetupModal && (
+        <div className="modal-overlay" style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div className="modal-content" style={{
+            backgroundColor: "white",
+            padding: "2rem",
+            borderRadius: "8px",
+            maxWidth: "400px",
+            width: "90%"
+          }}>
+            <h3 className="text-center mb-3">Cấu hình xác thực 2 lớp</h3>
+            <p className="text-center text-muted mb-4">
+              Vui lòng tạo mã pin 6 số cho xác thực 2 lớp. Mã này sẽ được sử dụng mỗi khi đăng nhập.
+            </p>
+            <form onSubmit={(e) => { e.preventDefault(); handle2FASetup(); }}>
+              <div className="mb-3">
+                <input
+                  type="text"
+                  className="form-control text-center"
+                  placeholder="Nhập mã 6 số"
+                  value={twoFASetupCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setTwoFASetupCode(value);
+                    setTwoFASetupError("");
+                  }}
+                  maxLength={6}
+                  style={{
+                    fontSize: twoFASetupCode ? "1.5rem" : "1rem",
+                    letterSpacing: twoFASetupCode ? "0.5rem" : "normal",
+                    fontWeight: "600",
+                    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    color: "#1a1a1a",
+                    padding: "0.75rem 1rem",
+                    border: "2px solid #d1d5db",
+                    borderRadius: "8px"
+                  }}
+                  disabled={twoFASetupLoading}
+                />
+              </div>
+              {twoFASetupError && (
+                <div className="alert alert-danger mb-3" role="alert">
+                  {twoFASetupError}
+                </div>
+              )}
+              <div className="d-grid gap-2">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={twoFASetupLoading}
+                >
+                  {twoFASetupLoading ? "Đang xử lý..." : "Kích hoạt"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    setShow2FASetupModal(false);
+                    setTwoFASetupCode("");
+                    setTwoFASetupError("");
+                  }}
+                  disabled={twoFASetupLoading}
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal đổi mã 2FA */}
+      {show2FAChangeModal && (
+        <div className="modal-overlay" style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div className="modal-content" style={{
+            backgroundColor: "white",
+            padding: "2rem",
+            borderRadius: "8px",
+            maxWidth: "450px",
+            width: "90%"
+          }}>
+            <h3 className="text-center mb-3">Đổi mã xác thực 2 lớp</h3>
+            <p className="text-center text-muted mb-4">
+              Vui lòng nhập mã xác thực cũ và mã xác thực mới (6 số).
+            </p>
+            <form onSubmit={(e) => { e.preventDefault(); handle2FAChange(); }}>
+              <div className="mb-3">
+                <label className="form-label">Mã xác thực cũ</label>
+                <input
+                  type="text"
+                  className="form-control text-center"
+                  placeholder="Nhập mã cũ 6 số"
+                  value={twoFAOldCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setTwoFAOldCode(value);
+                    setTwoFAChangeError("");
+                  }}
+                  maxLength={6}
+                  style={{
+                    fontSize: twoFAOldCode ? "1.5rem" : "1rem",
+                    letterSpacing: twoFAOldCode ? "0.5rem" : "normal",
+                    fontWeight: "600",
+                    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    color: "#1a1a1a",
+                    padding: "0.75rem 1rem",
+                    border: "2px solid #d1d5db",
+                    borderRadius: "8px"
+                  }}
+                  disabled={twoFAChangeLoading}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Mã xác thực mới</label>
+                <input
+                  type="text"
+                  className="form-control text-center"
+                  placeholder="Nhập mã mới 6 số"
+                  value={twoFANewCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setTwoFANewCode(value);
+                    setTwoFAChangeError("");
+                  }}
+                  maxLength={6}
+                  style={{
+                    fontSize: twoFANewCode ? "1.5rem" : "1rem",
+                    letterSpacing: twoFANewCode ? "0.5rem" : "normal",
+                    fontWeight: "600",
+                    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    color: "#1a1a1a",
+                    padding: "0.75rem 1rem",
+                    border: "2px solid #d1d5db",
+                    borderRadius: "8px"
+                  }}
+                  disabled={twoFAChangeLoading}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Nhập lại mã xác thực mới</label>
+                <input
+                  type="text"
+                  className="form-control text-center"
+                  placeholder="Nhập lại mã mới 6 số"
+                  value={twoFAConfirmCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setTwoFAConfirmCode(value);
+                    setTwoFAChangeError("");
+                  }}
+                  maxLength={6}
+                  style={{
+                    fontSize: twoFAConfirmCode ? "1.5rem" : "1rem",
+                    letterSpacing: twoFAConfirmCode ? "0.5rem" : "normal",
+                    fontWeight: "600",
+                    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    color: "#1a1a1a",
+                    padding: "0.75rem 1rem",
+                    border: "2px solid #d1d5db",
+                    borderRadius: "8px"
+                  }}
+                  disabled={twoFAChangeLoading}
+                />
+              </div>
+              {twoFAChangeError && (
+                <div className="alert alert-danger mb-3" role="alert">
+                  {twoFAChangeError}
+                </div>
+              )}
+              <div className="d-grid gap-2">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={twoFAChangeLoading}
+                >
+                  {twoFAChangeLoading ? "Đang xử lý..." : "Đổi mã xác thực"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    setShow2FAChangeModal(false);
+                    setTwoFAOldCode("");
+                    setTwoFANewCode("");
+                    setTwoFAConfirmCode("");
+                    setTwoFAChangeError("");
+                  }}
+                  disabled={twoFAChangeLoading}
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+  </div>
   );
 
 }

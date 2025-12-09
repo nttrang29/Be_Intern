@@ -36,6 +36,18 @@ public class Fund {
     @Column(name = "status", nullable = false, length = 20)
     private FundStatus status = FundStatus.ACTIVE;
 
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "pending_auto_topup_amount", precision = 20, scale = 8)
+    private BigDecimal pendingAutoTopupAmount = BigDecimal.ZERO;
+
+    @Column(name = "pending_auto_topup_at")
+    private LocalDateTime pendingAutoTopupAt;
+
     @Column(name = "fund_name", nullable = false, length = 200)
     private String fundName;
 
@@ -150,6 +162,18 @@ public class Fund {
 
     public FundStatus getStatus() { return status; }
     public void setStatus(FundStatus status) { this.status = status; }
+
+    public Boolean getDeleted() { return deleted; }
+    public void setDeleted(Boolean deleted) { this.deleted = deleted; }
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
+    public BigDecimal getPendingAutoTopupAmount() { return pendingAutoTopupAmount; }
+    public void setPendingAutoTopupAmount(BigDecimal pendingAutoTopupAmount) { this.pendingAutoTopupAmount = pendingAutoTopupAmount; }
+
+    public LocalDateTime getPendingAutoTopupAt() { return pendingAutoTopupAt; }
+    public void setPendingAutoTopupAt(LocalDateTime pendingAutoTopupAt) { this.pendingAutoTopupAt = pendingAutoTopupAt; }
 
     public String getFundName() { return fundName; }
     public void setFundName(String fundName) { this.fundName = fundName; }

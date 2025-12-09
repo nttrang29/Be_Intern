@@ -37,11 +37,11 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             FundResponse fund = fundService.createFund(user.getUserId(), request);
-            
+
             res.put("message", "Tạo quỹ thành công");
             res.put("fund", fund);
             return ResponseEntity.ok(res);
-            
+
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -62,11 +62,11 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             List<FundResponse> funds = fundService.getAllFunds(user.getUserId());
-            
+
             res.put("funds", funds);
             res.put("total", funds.size());
             return ResponseEntity.ok(res);
-            
+
         } catch (Exception e) {
             res.put("error", "Lỗi hệ thống: " + e.getMessage());
             return ResponseEntity.status(500).body(res);
@@ -85,11 +85,11 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             List<FundResponse> funds = fundService.getPersonalFunds(user.getUserId(), hasDeadline);
-            
+
             res.put("funds", funds);
             res.put("total", funds.size());
             return ResponseEntity.ok(res);
-            
+
         } catch (Exception e) {
             res.put("error", "Lỗi hệ thống: " + e.getMessage());
             return ResponseEntity.status(500).body(res);
@@ -108,11 +108,11 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             List<FundResponse> funds = fundService.getGroupFunds(user.getUserId(), hasDeadline);
-            
+
             res.put("funds", funds);
             res.put("total", funds.size());
             return ResponseEntity.ok(res);
-            
+
         } catch (Exception e) {
             res.put("error", "Lỗi hệ thống: " + e.getMessage());
             return ResponseEntity.status(500).body(res);
@@ -130,11 +130,11 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             List<FundResponse> funds = fundService.getParticipatedFunds(user.getUserId());
-            
+
             res.put("funds", funds);
             res.put("total", funds.size());
             return ResponseEntity.ok(res);
-            
+
         } catch (Exception e) {
             res.put("error", "Lỗi hệ thống: " + e.getMessage());
             return ResponseEntity.status(500).body(res);
@@ -153,10 +153,10 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             FundResponse fund = fundService.getFundById(user.getUserId(), fundId);
-            
+
             res.put("fund", fund);
             return ResponseEntity.ok(res);
-            
+
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -179,11 +179,11 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             FundResponse fund = fundService.updateFund(user.getUserId(), fundId, request);
-            
+
             res.put("message", "Cập nhật quỹ thành công");
             res.put("fund", fund);
             return ResponseEntity.ok(res);
-            
+
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -205,10 +205,10 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             fundService.closeFund(user.getUserId(), fundId);
-            
+
             res.put("message", "Đóng quỹ thành công");
             return ResponseEntity.ok(res);
-            
+
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -230,10 +230,10 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             fundService.deleteFund(user.getUserId(), fundId);
-            
+
             res.put("message", "Xóa quỹ thành công");
             return ResponseEntity.ok(res);
-            
+
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -256,12 +256,20 @@ public class FundController {
         try {
             User user = userDetails.getUser();
             BigDecimal amount = new BigDecimal(request.get("amount").toString());
-            FundResponse fund = fundService.depositToFund(user.getUserId(), fundId, amount);
-            
+            String message = request.containsKey("message") ? String.valueOf(request.get("message")) : null;
+            boolean recovery = request.containsKey("recovery") && Boolean.TRUE.equals(request.get("recovery"));
+            FundResponse fund = fundService.depositToFund(
+                    user.getUserId(),
+                    fundId,
+                    amount,
+                    recovery ? com.example.financeapp.fund.entity.FundTransactionType.AUTO_DEPOSIT_RECOVERY : com.example.financeapp.fund.entity.FundTransactionType.DEPOSIT,
+                    message
+            );
+
             res.put("message", "Nạp tiền vào quỹ thành công");
             res.put("fund", fund);
             return ResponseEntity.ok(res);
-            
+
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -285,11 +293,37 @@ public class FundController {
             User user = userDetails.getUser();
             BigDecimal amount = new BigDecimal(request.get("amount").toString());
             FundResponse fund = fundService.withdrawFromFund(user.getUserId(), fundId, amount);
-            
+
             res.put("message", "Rút tiền từ quỹ thành công");
             res.put("fund", fund);
             return ResponseEntity.ok(res);
-            
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
+     * Lịch sử giao dịch quỹ
+     */
+    @GetMapping("/{id}/transactions")
+    public ResponseEntity<Map<String, Object>> getFundTransactions(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long fundId,
+            @RequestParam(name = "limit", required = false, defaultValue = "50") Integer limit
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            int safeLimit = (limit == null || limit <= 0) ? 50 : Math.min(limit, 200);
+            var history = fundService.getFundTransactions(user.getUserId(), fundId, safeLimit);
+            res.put("transactions", history);
+            res.put("total", history.size());
+            return ResponseEntity.ok(res);
         } catch (RuntimeException e) {
             res.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(res);
@@ -312,7 +346,7 @@ public class FundController {
             boolean isUsed = fundService.isWalletUsed(walletId);
             res.put("isUsed", isUsed);
             return ResponseEntity.ok(res);
-            
+
         } catch (Exception e) {
             res.put("error", "Lỗi hệ thống: " + e.getMessage());
             return ResponseEntity.status(500).body(res);

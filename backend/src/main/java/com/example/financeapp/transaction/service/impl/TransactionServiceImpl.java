@@ -3,6 +3,7 @@ package com.example.financeapp.transaction.service.impl;
 import com.example.financeapp.budget.service.BudgetCheckService;
 import com.example.financeapp.category.entity.Category;
 import com.example.financeapp.category.repository.CategoryRepository;
+import com.example.financeapp.fund.service.FundService;
 import com.example.financeapp.transaction.dto.CreateTransactionRequest;
 import com.example.financeapp.transaction.dto.UpdateTransactionRequest;
 import com.example.financeapp.transaction.entity.Transaction;
@@ -15,6 +16,8 @@ import com.example.financeapp.user.repository.UserRepository;
 import com.example.financeapp.wallet.entity.Wallet;
 import com.example.financeapp.wallet.repository.WalletMemberRepository;
 import com.example.financeapp.wallet.repository.WalletRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,8 @@ import java.util.List;
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
+    private static final Logger log = LoggerFactory.getLogger(TransactionServiceImpl.class);
+
     @Autowired private TransactionRepository transactionRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private WalletRepository walletRepository;
@@ -32,6 +37,7 @@ public class TransactionServiceImpl implements TransactionService {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private WalletMemberRepository walletMemberRepository;
     @Autowired private BudgetCheckService budgetCheckService;
+    @Autowired private FundService fundService;
 
     private Transaction createTransaction(Long userId, CreateTransactionRequest req, String typeName) {
         // 1. Kiểm tra user tồn tại
@@ -90,6 +96,16 @@ public class TransactionServiceImpl implements TransactionService {
 
         // 8. Save wallet với balance mới
         walletRepository.save(wallet);
+
+        // Auto recovery for funds using this wallet as source (when top-up)
+        if (!"Chi tiêu".equals(typeName)) {
+            try {
+                fundService.tryAutoRecoverForWallet(wallet.getWalletId());
+            } catch (Exception e) {
+                // Không block giao dịch ví nếu recovery thất bại
+                log.warn("Không thể auto recover quỹ sau khi nạp ví {}: {}", wallet.getWalletId(), e.getMessage());
+            }
+        }
 
         // 9. Tạo transaction
         Transaction tx = new Transaction();

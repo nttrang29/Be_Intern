@@ -20,7 +20,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
         LEFT JOIN FundMember fm ON fm.fund.fundId = f.fundId
-        WHERE f.owner.userId = :userId OR fm.user.userId = :userId
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND (f.owner.userId = :userId OR fm.user.userId = :userId)
         ORDER BY f.createdAt DESC
         """)
     List<Fund> findByUserInvolved(@Param("userId") Long userId);
@@ -33,7 +34,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.owner.userId = :userId AND f.fundType = :fundType
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.owner.userId = :userId AND f.fundType = :fundType
         ORDER BY f.createdAt DESC
         """)
     List<Fund> findByOwner_UserIdAndFundTypeOrderByCreatedAtDesc(
@@ -49,7 +51,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.owner.userId = :userId 
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.owner.userId = :userId 
           AND f.fundType = :fundType 
           AND f.status = :status
         ORDER BY f.createdAt DESC
@@ -77,7 +80,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.status = :status
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.status = :status
         ORDER BY f.createdAt DESC
         """)
     List<Fund> findByStatusOrderByCreatedAtDesc(@Param("status") FundStatus status);
@@ -90,7 +94,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.hasDeadline = true
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.hasDeadline = true
           AND f.status = 'ACTIVE'
           AND f.endDate <= :today
         """)
@@ -117,6 +122,17 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         """)
     List<Fund> findByTargetWallet_WalletId(@Param("walletId") Long walletId);
 
+    @Query("""
+        SELECT f FROM Fund f
+        LEFT JOIN FETCH f.owner
+        LEFT JOIN FETCH f.sourceWallet
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.sourceWallet.walletId = :walletId
+          AND f.pendingAutoTopupAmount IS NOT NULL
+          AND f.pendingAutoTopupAmount > 0
+        """)
+    List<Fund> findPendingAutoTopupBySourceWallet(@Param("walletId") Long walletId);
+
     /**
      * Tìm các quỹ cần nhắc nhở theo DAILY
      */
@@ -125,15 +141,16 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.reminderEnabled = true
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.reminderEnabled = true
           AND f.reminderType = 'DAILY'
           AND f.status = 'ACTIVE'
           AND f.reminderTime <= :currentTime
           AND f.reminderTime >= :startTime
         """)
     List<Fund> findDailyReminders(
-        @Param("startTime") java.time.LocalTime startTime,
-        @Param("currentTime") java.time.LocalTime currentTime
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("currentTime") java.time.LocalTime currentTime
     );
 
     /**
@@ -144,7 +161,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.reminderEnabled = true
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.reminderEnabled = true
           AND f.reminderType = 'WEEKLY'
           AND f.status = 'ACTIVE'
           AND f.reminderDayOfWeek = :dayOfWeek
@@ -152,9 +170,9 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
           AND f.reminderTime >= :startTime
         """)
     List<Fund> findWeeklyReminders(
-        @Param("dayOfWeek") Integer dayOfWeek,
-        @Param("startTime") java.time.LocalTime startTime,
-        @Param("currentTime") java.time.LocalTime currentTime
+            @Param("dayOfWeek") Integer dayOfWeek,
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("currentTime") java.time.LocalTime currentTime
     );
 
     /**
@@ -165,7 +183,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-        WHERE f.reminderEnabled = true
+        WHERE (f.deleted = false OR f.deleted IS NULL)
+          AND f.reminderEnabled = true
           AND f.reminderType = 'MONTHLY'
           AND f.status = 'ACTIVE'
           AND f.reminderDayOfMonth = :dayOfMonth
@@ -173,9 +192,9 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
           AND f.reminderTime >= :startTime
         """)
     List<Fund> findMonthlyReminders(
-        @Param("dayOfMonth") Integer dayOfMonth,
-        @Param("startTime") java.time.LocalTime startTime,
-        @Param("currentTime") java.time.LocalTime currentTime
+            @Param("dayOfMonth") Integer dayOfMonth,
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("currentTime") java.time.LocalTime currentTime
     );
 
     /**
@@ -186,7 +205,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-                WHERE f.autoDepositEnabled = true
+                WHERE (f.deleted = false OR f.deleted IS NULL)
+                    AND f.autoDepositEnabled = true
                     AND f.autoDepositScheduleType = 'DAILY'
                     AND f.status = 'ACTIVE'
                     AND f.autoDepositTime <= :currentTime
@@ -194,9 +214,9 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
                     AND (f.autoDepositStartAt IS NULL OR f.autoDepositStartAt <= :currentDateTime)
         """)
     List<Fund> findDailyAutoDeposits(
-                @Param("startTime") java.time.LocalTime startTime,
-                @Param("currentTime") java.time.LocalTime currentTime,
-                @Param("currentDateTime") java.time.LocalDateTime currentDateTime
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("currentTime") java.time.LocalTime currentTime,
+            @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
 
     /**
@@ -207,7 +227,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-                WHERE f.autoDepositEnabled = true
+                WHERE (f.deleted = false OR f.deleted IS NULL)
+                    AND f.autoDepositEnabled = true
                     AND f.autoDepositScheduleType = 'WEEKLY'
                     AND f.status = 'ACTIVE'
                     AND f.autoDepositDayOfWeek = :dayOfWeek
@@ -216,10 +237,10 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
                     AND (f.autoDepositStartAt IS NULL OR f.autoDepositStartAt <= :currentDateTime)
         """)
     List<Fund> findWeeklyAutoDeposits(
-        @Param("dayOfWeek") Integer dayOfWeek,
-                @Param("startTime") java.time.LocalTime startTime,
-                @Param("currentTime") java.time.LocalTime currentTime,
-                @Param("currentDateTime") java.time.LocalDateTime currentDateTime
+            @Param("dayOfWeek") Integer dayOfWeek,
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("currentTime") java.time.LocalTime currentTime,
+            @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
 
     /**
@@ -230,7 +251,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.owner
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
-                WHERE f.autoDepositEnabled = true
+                WHERE (f.deleted = false OR f.deleted IS NULL)
+                    AND f.autoDepositEnabled = true
                     AND f.autoDepositScheduleType = 'MONTHLY'
                     AND f.status = 'ACTIVE'
                     AND f.autoDepositDayOfMonth = :dayOfMonth
@@ -239,10 +261,10 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
                     AND (f.autoDepositStartAt IS NULL OR f.autoDepositStartAt <= :currentDateTime)
         """)
     List<Fund> findMonthlyAutoDeposits(
-        @Param("dayOfMonth") Integer dayOfMonth,
-                @Param("startTime") java.time.LocalTime startTime,
-                @Param("currentTime") java.time.LocalTime currentTime,
-                @Param("currentDateTime") java.time.LocalDateTime currentDateTime
+            @Param("dayOfMonth") Integer dayOfMonth,
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("currentTime") java.time.LocalTime currentTime,
+            @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
 }
 

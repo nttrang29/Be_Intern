@@ -11,12 +11,14 @@ import { useLocation } from "react-router-dom";
 import WalletList from "../../components/wallets/WalletList";
 import WalletDetail from "../../components/wallets/WalletDetail";
 import { useWalletData } from "../../contexts/WalletDataContext";
+import { useBudgetData } from "../../contexts/BudgetDataContext";
 import { useCategoryData } from "../../contexts/CategoryDataContext";
 import { transactionAPI } from "../../services/transaction.service";
 import { walletAPI } from "../../services/wallet.service";
 import Toast from "../../components/common/Toast/Toast";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { formatMoney } from "../../utils/formatMoney";
+import { formatVietnamDateTime } from "../../utils/dateFormat";
 
 import "../../styles/pages/WalletsPage.css";
 import "../../styles/components/wallets/WalletList.css";
@@ -239,72 +241,71 @@ const sortWalletsByMode = (walletList = [], sortMode = "default") => {
 };
 
 /**
- * Format ngày theo múi giờ Việt Nam (UTC+7)
- * @param {Date|string} date - Date object hoặc date string (ISO format từ API)
- * @returns {string} - Format: "DD/MM/YYYY"
- */
-function formatVietnamDate(date) {
-  if (!date) return "";
-
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else if (typeof date === "string") {
-    d = new Date(date);
-  } else {
-    return "";
-  }
-
-  if (Number.isNaN(d.getTime())) return "";
-
-  return d.toLocaleDateString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-/**
- * Format giờ theo múi giờ Việt Nam (UTC+7)
- * @param {Date|string} date - Date object hoặc date string (ISO format từ API)
- * @returns {string} - Format: "HH:mm"
- */
-function formatVietnamTime(date) {
-  if (!date) return "";
-
-  let d;
-  if (date instanceof Date) {
-    d = date;
-  } else if (typeof date === "string") {
-    d = new Date(date);
-  } else {
-    return "";
-  }
-
-  if (Number.isNaN(d.getTime())) return "";
-
-  return d.toLocaleTimeString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-/**
  * Format time label cho giao dịch (ngày giờ chính xác)
  */
+function normalizeTransactionDate(rawInput) {
+  if (!rawInput && rawInput !== 0) {
+    return getVietnamDateTime();
+  }
+
+  if (rawInput instanceof Date) {
+    if (!Number.isNaN(rawInput.getTime())) {
+      return rawInput.toISOString();
+    }
+    return getVietnamDateTime();
+  }
+
+  if (typeof rawInput === "number") {
+    const fromNumber = new Date(rawInput);
+    if (!Number.isNaN(fromNumber.getTime())) {
+      return fromNumber.toISOString();
+    }
+  }
+
+  const rawString = String(rawInput).trim();
+  if (!rawString) {
+    return getVietnamDateTime();
+  }
+
+  const isoWithoutZonePattern = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)?$/;
+  const hasExplicitZone = /(Z|z|[+\-]\d{2}:?\d{2})$/.test(rawString);
+  if (isoWithoutZonePattern.test(rawString) && !hasExplicitZone) {
+    const isoLike = rawString.includes("T") ? rawString : rawString.replace(" ", "T");
+    const appended = `${isoLike}Z`;
+    const utcDate = new Date(appended);
+    if (!Number.isNaN(utcDate.getTime())) {
+      return utcDate.toISOString();
+    }
+  }
+
+  const isoAttempt = new Date(rawString);
+  if (!Number.isNaN(isoAttempt.getTime())) {
+    return isoAttempt.toISOString();
+  }
+
+  const vietnamPattern = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T,]*(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/;
+  const match = rawString.match(vietnamPattern);
+  if (match) {
+    const [, dayStr, monthStr, yearStr, hourStr = "0", minuteStr = "0", secondStr = "0"] = match;
+    const day = Number(dayStr);
+    const month = Number(monthStr) - 1;
+    const year = Number(yearStr);
+    const hour = Number(hourStr);
+    const minute = Number(minuteStr);
+    const second = Number(secondStr);
+    const date = new Date(year, month, day, hour, minute, second);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+
+  return getVietnamDateTime();
+}
+
 function formatTimeLabel(dateString) {
   if (!dateString) return "";
-
-  const transactionDate = new Date(dateString);
-  if (Number.isNaN(transactionDate.getTime())) return "";
-
-  const dateStr = formatVietnamDate(transactionDate);
-  const timeStr = formatVietnamTime(transactionDate);
-
-  return `${dateStr} ${timeStr}`;
+  const normalized = normalizeTransactionDate(dateString);
+  return formatVietnamDateTime(normalized);
 }
 
 const getVietnamDateTime = () => {
@@ -389,6 +390,7 @@ const getVietnamDateTime = () => {
 
 export default function WalletsPage() {
   const { t } = useLanguage();
+  const { budgets = [] } = useBudgetData();
   const {
     wallets = [],
     createWallet,
@@ -458,21 +460,32 @@ export default function WalletsPage() {
     const isWalletOwnedByMe = useCallback(
       (wallet) => {
         if (!wallet) return false;
-        if (!(wallet.isShared || walletHasSharedMembers(wallet))) return false;
+
+        const hasSharedContext = wallet.isShared || walletHasSharedMembers(wallet);
         const role = (
           wallet.walletRole ||
           wallet.sharedRole ||
           wallet.role ||
           ""
         ).toUpperCase();
+
         if (role) {
           if (["OWNER", "MASTER", "ADMIN"].includes(role)) return true;
-          if (["MEMBER", "VIEW", "VIEWER", "USER", "USE"].includes(role))
+          if (["MEMBER", "VIEW", "VIEWER", "USER", "USE"].includes(role)) {
             return false;
+          }
         }
+
         if (wallet.ownerUserId && currentUserId) {
           return String(wallet.ownerUserId) === String(currentUserId);
         }
+
+        // Plain personal wallets (no shared context) belong to the current user by default
+        if (!hasSharedContext) {
+          return true;
+        }
+
+        // Shared wallet without explicit metadata: assume owner to keep controls available
         return true;
       },
       [currentUserId, walletHasSharedMembers]
@@ -594,7 +607,6 @@ export default function WalletsPage() {
   const [createShareEmail, setCreateShareEmail] = useState("");
 
   const [editForm, setEditForm] = useState(buildWalletForm());
-  const [editShareEmail, setEditShareEmail] = useState("");
   const [shareWalletLoading, setShareWalletLoading] = useState(false);
   const [selectedSharedOwnerId, setSelectedSharedOwnerId] = useState(null);
   const [selectedSharedOwnerWalletId, setSelectedSharedOwnerWalletId] =
@@ -1012,6 +1024,11 @@ export default function WalletsPage() {
   // non-default wallet appears directly after it (position 1).
   const finalWallets = useMemo(() => {
     const arr = Array.isArray(sortedWallets) ? [...sortedWallets] : [];
+
+    // When user selects an explicit sort mode, respect that order fully
+    if (sortBy !== "default") {
+      return arr;
+    }
     const getCreatedTime = (w) => {
       if (!w) return 0;
       const raw = w.createdAt || w.created_at || w.created || w.timestamp || 0;
@@ -1047,14 +1064,13 @@ export default function WalletsPage() {
     }
 
     return arr;
-  }, [sortedWallets]);
+  }, [sortedWallets, sortBy]);
 
   // Debug: log counts to help diagnose empty shared list (placed after sortedWallets)
   // (debug logging removed)
 
   useEffect(() => {
     setEditForm(buildWalletForm(selectedWallet));
-    setEditShareEmail("");
     setMergeTargetId("");
     setTopupAmount("");
     setTopupNote("");
@@ -1514,16 +1530,15 @@ export default function WalletsPage() {
     setEditForm((prev) => ({ ...prev, [field]: nextValue }));
   };
 
-  const handleAddEditShareEmail = async () => {
-    const result = await shareEmailForSelectedWallet(editShareEmail);
-    if (result?.success) {
-      setEditShareEmail("");
-    }
-  };
-
   const handleSubmitEdit = async (e) => {
     e.preventDefault();
     if (!selectedWallet || !updateWallet) return;
+    const isBudgetWallet = budgets.some((b) => Number(b.walletId) === Number(selectedWallet.id));
+    const currencyChanged = selectedWallet?.currency !== editForm.currency;
+    if (isBudgetWallet && currencyChanged) {
+      showToast("Ví này đang được dùng làm nguồn cho ngân sách nên không thể đổi đơn vị tiền tệ", "error");
+      return;
+    }
     try {
       await updateWallet({
         id: selectedWallet.id,
@@ -1804,15 +1819,6 @@ export default function WalletsPage() {
       } else {
         showToast(t('wallets.toast.merged'));
       }
-      try {
-        logActivity({
-          type: "wallet.merge",
-          message: `Gộp ví ${sourceWallet?.name || sourceWallet?.id} vào ${targetWallet?.name || targetWallet?.id}`,
-          data: { sourceId, targetId },
-        });
-      } catch (e) {
-        // ignore logging errors
-      }
       setSelectedId(targetId);
       setActiveDetailTab("view");
     } catch (error) {
@@ -1858,26 +1864,167 @@ export default function WalletsPage() {
   };
 
   // Map transaction từ API sang format cho WalletDetail
-  const mapTransactionForWallet = useCallback((tx, walletId, walletRef = null) => {
-    const typeName = tx.transactionType?.typeName || "";
-    const normalizedType = typeName.toLowerCase();
-    const isExpense = normalizedType.includes("chi") || normalizedType.includes("expense");
-    const amount = parseFloat(tx.amount || 0);
+    const resolveActorName = useCallback((tx) => {
+      const extractFromObject = (obj) => {
+        if (!obj || typeof obj !== "object") return "";
+        return (
+          obj.fullName ||
+          obj.displayName ||
+          obj.name ||
+          obj.username ||
+          obj.email ||
+          (obj.firstName && obj.lastName && `${obj.firstName} ${obj.lastName}`) ||
+          obj.firstName ||
+          obj.lastName ||
+          ""
+        );
+      };
 
-    const categoryName = tx.category?.categoryName || tx.categoryName || "Khác";
-    const note = tx.note || "";
-    let title = categoryName;
-    if (note) {
-      title = `${categoryName}${note ? ` - ${note}` : ""}`;
-    }
+      const candidates = [
+        tx.actorName,
+        tx.createdByName,
+        tx.creatorName,
+        tx.createdBy,
+        tx.creator,
+        tx.updatedByName,
+        tx.performedBy,
+        tx.executorName,
+        tx.userFullName,
+        tx.userName,
+        tx.username,
+        extractFromObject(tx.createdByUser),
+        extractFromObject(tx.creatorUser),
+        extractFromObject(tx.user),
+      ];
 
-    const displayAmount = isExpense ? -Math.abs(amount) : Math.abs(amount);
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        if (typeof candidate === "string") {
+          const trimmed = candidate.trim();
+          if (trimmed.length) return trimmed;
+        } else if (typeof candidate === "object") {
+          const extracted = extractFromObject(candidate);
+          if (extracted.trim().length) return extracted.trim();
+        }
+      }
 
-    const dateValue =
-      tx.createdAt || tx.transactionDate || new Date().toISOString();
+      return "";
+    }, []);
+
+    const detectTransactionDirection = useCallback((tx) => {
+      const normalize = (value) => {
+        if (value === undefined || value === null) return "";
+        if (typeof value === "string") return value.trim().toUpperCase();
+        if (typeof value === "number") return String(value).trim().toUpperCase();
+        if (typeof value === "object") {
+          const nested =
+            value.type ||
+            value.typeName ||
+            value.code ||
+            value.key ||
+            value.name ||
+            value.value ||
+            value.direction;
+          return normalize(nested);
+        }
+        return "";
+      };
+
+      const expenseTokens = [
+        "EXPENSE",
+        "CHI",
+        "OUT",
+        "OUTFLOW",
+        "DEBIT",
+        "WITHDRAW",
+        "SPEND",
+        "PAYMENT",
+      ];
+      const incomeTokens = [
+        "INCOME",
+        "THU",
+        "IN",
+        "INFLOW",
+        "CREDIT",
+        "TOPUP",
+        "DEPOSIT",
+        "RECEIVE",
+        "SALARY",
+      ];
+
+      const checkTokens = (value, tokens) => {
+        if (!value) return false;
+        return tokens.some((token) => value.includes(token));
+      };
+
+      if (tx.isExpense === true || tx.isDebit === true) return "expense";
+      if (tx.isIncome === true || tx.isCredit === true) return "income";
+
+      const directionCandidates = [
+        tx.transactionType,
+        tx.transactionType?.type,
+        tx.transactionType?.typeName,
+        tx.transactionType?.typeKey,
+        tx.transactionType?.code,
+        tx.transactionType?.direction,
+        tx.transactionType?.categoryType,
+        tx.type,
+        tx.typeName,
+        tx.typeCode,
+        tx.transactionKind,
+        tx.direction,
+        tx.flow,
+        tx.transactionFlow,
+        tx.category?.type,
+        tx.category?.categoryType,
+        tx.category?.transactionType,
+        tx.category?.typeName,
+        tx.categoryType,
+        tx.transactionCategory?.type,
+        tx.transactionCategory?.direction,
+      ];
+
+      for (const candidate of directionCandidates) {
+        const normalized = normalize(candidate);
+        if (!normalized) continue;
+        if (checkTokens(normalized, expenseTokens)) return "expense";
+        if (checkTokens(normalized, incomeTokens)) return "income";
+      }
+
+      if (typeof tx.amount === "number") {
+        if (tx.amount < 0) return "expense";
+        if (tx.amount > 0) return "income";
+      }
+
+      return "income";
+    }, []);
+
+    const mapTransactionForWallet = useCallback((tx, walletId, walletRef = null) => {
+      const direction = detectTransactionDirection(tx);
+      const isExpense = direction === "expense";
+      const amount = parseFloat(tx.amount || 0);
+
+      const categoryName = tx.category?.categoryName || tx.categoryName || "Khác";
+      const note = tx.note || "";
+      let title = categoryName;
+      if (note) {
+        title = `${categoryName}${note ? ` - ${note}` : ""}`;
+      }
+
+      const displayAmount = isExpense ? -Math.abs(amount) : Math.abs(amount);
+
+    const rawDateValue =
+      tx.createdAt ||
+      tx.transactionDate ||
+      tx.transaction_at ||
+      tx.transactionDateTime ||
+      tx.date ||
+      tx.time ||
+      tx.createdTime;
+    const dateValue = normalizeTransactionDate(rawDateValue);
     const timeLabel = formatTimeLabel(dateValue);
 
-    const creatorName = tx.user?.fullName || tx.user?.name || tx.user?.email || tx.createdByName || tx.creatorName || (tx.user && (tx.user.username || tx.user.displayName)) || "";
+      const creatorName = resolveActorName(tx);
 
     const walletInfo = tx.wallet || {};
     const fallbackWalletName =
@@ -1931,7 +2078,7 @@ export default function WalletsPage() {
       originalCurrency: tx.originalCurrency || null,
       exchangeRate: tx.exchangeRate ?? tx.appliedExchangeRate ?? null,
     };
-  }, []);
+  }, [detectTransactionDirection, resolveActorName]);
 
   // Map transfer từ API sang format cho WalletDetail
   const mapTransferForWallet = useCallback((transfer, walletId, walletAltId = null) => {
@@ -1965,11 +2112,23 @@ export default function WalletsPage() {
 
     const displayAmount = isFromWallet ? -Math.abs(amount) : Math.abs(amount);
 
-    const dateValue =
-      transfer.createdAt || transfer.transferDate || new Date().toISOString();
+    const rawDateValue =
+      transfer.createdAt ||
+      transfer.transferDate ||
+      transfer.executedAt ||
+      transfer.date ||
+      transfer.time;
+    const dateValue = normalizeTransactionDate(rawDateValue);
     const timeLabel = formatTimeLabel(dateValue);
 
-    const actorName = transfer.user?.fullName || transfer.user?.name || transfer.user?.email || transfer.createdByName || transfer.creatorName || "";
+    const actorName =
+      resolveActorName(transfer) ||
+      transfer.user?.fullName ||
+      transfer.user?.name ||
+      transfer.user?.email ||
+      transfer.createdByName ||
+      transfer.creatorName ||
+      "";
     const transferId = transfer.transferId ?? transfer.id ?? `${walletId || "wallet"}-${dateValue}`;
 
     const currencyCandidates = [
@@ -2004,7 +2163,7 @@ export default function WalletsPage() {
       targetWallet: targetName,
       type: "transfer",
     };
-  }, []);
+  }, [resolveActorName]);
 
   // Fetch transactions cho wallet đang chọn
   useEffect(() => {
@@ -2126,7 +2285,7 @@ export default function WalletsPage() {
 
       {/* STATS */}
       <div className="wallets-page__stats">
-        <div className="budget-metric-card" tabIndex={0} aria-describedby="tooltip-total">
+        <div className="budget-metric-card budget-metric-card--has-toggle" tabIndex={0} aria-describedby="tooltip-total">
           <div className="budget-metric-label">
             {t('wallets.total_balance')}
             <button
@@ -2200,17 +2359,23 @@ export default function WalletsPage() {
           onSearchChange={setSearch}
           sortBy={sortBy}
           onSortChange={setSortBy}
-          wallets={finalWallets.map(w => ({
-            ...w,
-            // Merge sharedEmails từ localSharedMap nếu có
-            sharedEmails: [
-              ...(Array.isArray(w.sharedEmails) ? w.sharedEmails : []),
-              ...(Array.isArray(localSharedMap[w.id]) ? localSharedMap[w.id] : [])
-            ].filter((email, index, self) => 
-              email && typeof email === 'string' && email.trim() && 
-              self.indexOf(email) === index
-            )
-          }))}
+          wallets={finalWallets.map((w) => {
+            const ownedByMe = isWalletOwnedByMe(w);
+            const displayIsDefault = !!w.isDefault && ownedByMe && !w.isShared;
+            return {
+              ...w,
+              isDefault: displayIsDefault,
+              displayIsDefault,
+              // Merge sharedEmails từ localSharedMap nếu có
+              sharedEmails: [
+                ...(Array.isArray(w.sharedEmails) ? w.sharedEmails : []),
+                ...(Array.isArray(localSharedMap[w.id]) ? localSharedMap[w.id] : [])
+              ].filter((email, index, self) =>
+                email && typeof email === "string" && email.trim() &&
+                self.indexOf(email) === index
+              )
+            };
+          })}
           selectedId={selectedId}
           onSelectWallet={handleSelectWallet}
           sharedWithMeOwners={sharedWithMeOwnerGroups}
@@ -2254,10 +2419,6 @@ export default function WalletsPage() {
           onSubmitCreate={handleSubmitCreate}
           editForm={editForm}
           onEditFieldChange={handleEditFieldChange}
-          editShareEmail={editShareEmail}
-          setEditShareEmail={setEditShareEmail}
-          onAddEditShareEmail={handleAddEditShareEmail}
-          shareWalletLoading={shareWalletLoading}
           onSubmitEdit={handleSubmitEdit}
           mergeTargetId={mergeTargetId}
           setMergeTargetId={setMergeTargetId}

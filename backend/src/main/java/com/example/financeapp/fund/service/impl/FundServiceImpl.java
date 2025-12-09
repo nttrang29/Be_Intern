@@ -3,20 +3,28 @@ package com.example.financeapp.fund.service.impl;
 import com.example.financeapp.fund.dto.CreateFundRequest;
 import com.example.financeapp.fund.dto.FundMemberResponse;
 import com.example.financeapp.fund.dto.FundResponse;
+import com.example.financeapp.fund.dto.FundTransactionResponse;
 import com.example.financeapp.fund.dto.UpdateFundRequest;
 import com.example.financeapp.fund.entity.Fund;
 import com.example.financeapp.fund.entity.FundMember;
 import com.example.financeapp.fund.entity.FundMemberRole;
 import com.example.financeapp.fund.entity.FundStatus;
+import com.example.financeapp.fund.entity.FundTransaction;
+import com.example.financeapp.fund.entity.FundTransactionStatus;
+import com.example.financeapp.fund.entity.FundTransactionType;
 import com.example.financeapp.fund.entity.FundType;
 import com.example.financeapp.fund.repository.FundMemberRepository;
 import com.example.financeapp.fund.repository.FundRepository;
+import com.example.financeapp.fund.repository.FundTransactionRepository;
 import com.example.financeapp.fund.service.FundService;
+import com.example.financeapp.notification.service.NotificationService;
+import com.example.financeapp.email.EmailService;
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.user.repository.UserRepository;
 import com.example.financeapp.wallet.entity.Wallet;
 import com.example.financeapp.wallet.repository.WalletRepository;
 import com.example.financeapp.wallet.service.WalletService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +47,9 @@ public class FundServiceImpl implements FundService {
     private FundMemberRepository fundMemberRepository;
 
     @Autowired
+    private FundTransactionRepository fundTransactionRepository;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -49,6 +60,23 @@ public class FundServiceImpl implements FundService {
 
     @Autowired
     private com.example.financeapp.wallet.repository.WalletTransferRepository walletTransferRepository;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private EmailService emailService;
+
+    private void ensureNotDeleted(Fund fund) {
+        if (Boolean.TRUE.equals(fund.getDeleted())) {
+            throw new RuntimeException("Quỹ đã bị xóa (mềm)");
+        }
+    }
+
+    private void clearPendingAutoTopup(Fund fund) {
+        fund.setPendingAutoTopupAmount(BigDecimal.ZERO);
+        fund.setPendingAutoTopupAt(null);
+    }
 
     @Override
     @Transactional
@@ -239,6 +267,7 @@ public class FundServiceImpl implements FundService {
     public FundResponse getFundById(Long userId, Long fundId) {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        ensureNotDeleted(fund);
 
         // Kiểm tra quyền: user phải là chủ quỹ hoặc thành viên
         if (!fund.getOwner().getUserId().equals(userId) &&
@@ -254,6 +283,7 @@ public class FundServiceImpl implements FundService {
     public FundResponse updateFund(Long userId, Long fundId, UpdateFundRequest request) {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        ensureNotDeleted(fund);
 
         // Kiểm tra quyền: chỉ chủ quỹ mới được sửa
         if (!fund.getOwner().getUserId().equals(userId)) {
@@ -327,7 +357,7 @@ public class FundServiceImpl implements FundService {
             // Logic cập nhật thành viên sẽ được xử lý riêng
             // Ở đây chỉ validate
         }
-                fund.setAutoDepositStartAt(null);
+        fund.setAutoDepositStartAt(null);
 
         fund = fundRepository.save(fund);
         return buildFundResponse(fund);
@@ -338,6 +368,7 @@ public class FundServiceImpl implements FundService {
     public void closeFund(Long userId, Long fundId) {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        ensureNotDeleted(fund);
 
         if (!fund.getOwner().getUserId().equals(userId)) {
             throw new RuntimeException("Chỉ chủ quỹ mới được đóng quỹ");
@@ -352,23 +383,27 @@ public class FundServiceImpl implements FundService {
     public void deleteFund(Long userId, Long fundId) {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        if (Boolean.TRUE.equals(fund.getDeleted())) {
+            return; // đã xóa mềm
+        }
 
         if (!fund.getOwner().getUserId().equals(userId)) {
             throw new RuntimeException("Chỉ chủ quỹ mới được xóa quỹ");
         }
 
-        // Xóa thành viên trước
-        fundMemberRepository.deleteByFund_FundId(fundId);
-
-        // Xóa quỹ
-        fundRepository.delete(fund);
+        fund.setStatus(FundStatus.CLOSED);
+        fund.setDeleted(true);
+        fund.setDeletedAt(LocalDateTime.now());
+        fundRepository.save(fund);
     }
 
     @Override
     @Transactional
-    public FundResponse depositToFund(Long userId, Long fundId, BigDecimal amount) {
+    public FundResponse depositToFund(Long userId, Long fundId, BigDecimal amount, FundTransactionType type, String message) {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        ensureNotDeleted(fund);
+        FundTransactionType effectiveType = (type != null) ? type : FundTransactionType.DEPOSIT;
 
         // Kiểm tra quyền
         if (!fund.getOwner().getUserId().equals(userId) &&
@@ -378,6 +413,13 @@ public class FundServiceImpl implements FundService {
 
         if (fund.getStatus() != FundStatus.ACTIVE) {
             throw new RuntimeException("Không thể nạp tiền vào quỹ đã đóng");
+        }
+
+        if (effectiveType == FundTransactionType.AUTO_DEPOSIT_RECOVERY) {
+            BigDecimal pending = fund.getPendingAutoTopupAmount() != null ? fund.getPendingAutoTopupAmount() : BigDecimal.ZERO;
+            if (pending.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("Không có khoản nạp bù đang chờ");
+            }
         }
 
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -411,6 +453,15 @@ public class FundServiceImpl implements FundService {
 
         // Cập nhật số tiền quỹ
         fund.setCurrentAmount(fund.getCurrentAmount().add(amount));
+        if (effectiveType == FundTransactionType.AUTO_DEPOSIT_RECOVERY) {
+            BigDecimal pending = fund.getPendingAutoTopupAmount() != null ? fund.getPendingAutoTopupAmount() : BigDecimal.ZERO;
+            BigDecimal newPending = pending.subtract(amount);
+            if (newPending.compareTo(BigDecimal.ZERO) < 0) newPending = BigDecimal.ZERO;
+            fund.setPendingAutoTopupAmount(newPending);
+            if (newPending.compareTo(BigDecimal.ZERO) == 0) {
+                fund.setPendingAutoTopupAt(null);
+            }
+        }
 
         // Nếu là quỹ có kỳ hạn và đã đạt mục tiêu, chỉ đánh dấu trạng thái COMPLETED
         // nhưng KHÔNG tự động rút tiền về ví nguồn. Việc rút sẽ do người dùng thực hiện
@@ -444,6 +495,41 @@ public class FundServiceImpl implements FundService {
             System.err.println("Không thể ghi WalletTransfer sau khi nạp quỹ: " + ex.getMessage());
         }
 
+        // Lưu lịch sử giao dịch quỹ
+        User performer = userRepository.findById(userId)
+                .orElse(fund.getOwner());
+        FundTransaction tx = new FundTransaction();
+        tx.setFund(fund);
+        tx.setAmount(amount);
+        tx.setType(effectiveType);
+        tx.setStatus(FundTransactionStatus.SUCCESS);
+        tx.setMessage(message);
+        tx.setPerformedBy(performer);
+        fundTransactionRepository.save(tx);
+
+        if (effectiveType == FundTransactionType.AUTO_DEPOSIT_RECOVERY) {
+            try {
+                String email = performer.getEmail();
+                String fullName = performer.getFullName() != null ? performer.getFullName() : performer.getEmail();
+                if (email != null && !email.isBlank()) {
+                    String subject = "[MyWallet] ✅ Nạp bù quỹ thành công";
+                    String content = "Xin chào " + fullName + ",\n\n"
+                            + "Hệ thống đã nạp bù quỹ của bạn sau khi lần nạp tự động trước đó thất bại.\n\n"
+                            + "📊 Chi tiết:\n"
+                            + "   • Quỹ: " + fund.getFundName() + "\n"
+                            + "   • Số tiền nạp bù: " + String.format("%,.0f", amount) + " " + fund.getTargetWallet().getCurrencyCode() + "\n"
+                            + "   • Từ ví: " + (fund.getSourceWallet() != null ? fund.getSourceWallet().getWalletName() : "Ví nguồn") + "\n"
+                            + "   • Số dư mới trong quỹ: " + String.format("%,.0f", fund.getCurrentAmount()) + " " + fund.getTargetWallet().getCurrencyCode() + "\n"
+                            + "\n"
+                            + "Cảm ơn bạn đã tiếp tục đồng hành cùng MyWallet.\n\n"
+                            + "Trân trọng,\nĐội ngũ MyWallet";
+                    emailService.sendEmail(email, subject, content);
+                }
+            } catch (Exception ignore) {
+                // Không chặn flow nếu gửi email lỗi
+            }
+        }
+
         return buildFundResponse(fund);
     }
 
@@ -452,6 +538,7 @@ public class FundServiceImpl implements FundService {
     public FundResponse withdrawFromFund(Long userId, Long fundId, BigDecimal amount) {
         Fund fund = fundRepository.findByIdWithRelations(fundId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        ensureNotDeleted(fund);
 
         // Nếu quỹ có kỳ hạn: chỉ cho rút khi đã hoàn thành (COMPLETED)
         if (fund.getHasDeadline()) {
@@ -522,14 +609,44 @@ public class FundServiceImpl implements FundService {
         }
 
         fund = fundRepository.save(fund);
+
+        User performer = userRepository.findById(userId)
+                .orElse(fund.getOwner());
+        FundTransaction tx = new FundTransaction();
+        tx.setFund(fund);
+        tx.setAmount(amount);
+        tx.setType(FundTransactionType.WITHDRAW);
+        tx.setStatus(FundTransactionStatus.SUCCESS);
+        tx.setMessage("Rút tiền khỏi quỹ");
+        tx.setPerformedBy(performer);
+        fundTransactionRepository.save(tx);
+
         return buildFundResponse(fund);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FundTransactionResponse> getFundTransactions(Long userId, Long fundId, int limit) {
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        // cho phép xem cả khi quỹ đã xóa mềm để giữ báo cáo/lich sử
+        if (!fund.getOwner().getUserId().equals(userId) &&
+                !fundMemberRepository.existsByFund_FundIdAndUser_UserId(fundId, userId)) {
+            throw new RuntimeException("Bạn không có quyền xem lịch sử quỹ này");
+        }
+
+        int pageSize = limit <= 0 ? 50 : Math.min(limit, 200);
+        return fundTransactionRepository.findByFundId(fundId, PageRequest.of(0, pageSize))
+                .stream()
+                .map(FundTransactionResponse::from)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     /**
      * Tất toán quỹ có kỳ hạn khi đạt mục tiêu và chuyển toàn bộ tiền từ ví quỹ
      * về ví nguồn (sourceWallet).
+     * Được gọi bên trong các transaction khác, nên không cần @Transactional riêng.
      */
-    @Transactional
     protected void settleFundAndTransferToSourceWallet(Fund fund) {
         if (fund == null) {
             throw new RuntimeException("Quỹ không hợp lệ");
@@ -706,6 +823,50 @@ public class FundServiceImpl implements FundService {
                     throw new RuntimeException("Vui lòng chọn tháng và ngày cho nhắc nhở");
                 }
                 break;
+        }
+    }
+
+    @Override
+    @Transactional
+    public void tryAutoRecoverForWallet(Long walletId) {
+        List<Fund> pendingFunds = fundRepository.findPendingAutoTopupBySourceWallet(walletId);
+        if (pendingFunds.isEmpty()) return;
+
+        for (Fund fund : pendingFunds) {
+            try {
+                BigDecimal pending = fund.getPendingAutoTopupAmount() != null ? fund.getPendingAutoTopupAmount() : BigDecimal.ZERO;
+                if (pending.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
+                        .orElse(null);
+                if (sourceWallet == null) continue;
+                if (sourceWallet.getBalance().compareTo(pending) < 0) continue;
+
+                depositToFund(
+                        fund.getOwner().getUserId(),
+                        fund.getFundId(),
+                        pending,
+                        FundTransactionType.AUTO_DEPOSIT_RECOVERY,
+                        "Tự động nạp bù sau khi ví được nạp thêm"
+                );
+
+                try {
+                    String title = "Nạp bù tự động thành công: " + fund.getFundName();
+                    String msg = "Đã nạp bù " + pending + " " + fund.getTargetWallet().getCurrencyCode() + " vào quỹ.";
+                    notificationService.createUserNotification(
+                            fund.getOwner().getUserId(),
+                            com.example.financeapp.notification.entity.Notification.NotificationType.SYSTEM_ANNOUNCEMENT,
+                            title,
+                            msg,
+                            fund.getFundId(),
+                            "FUND_AUTO_DEPOSIT_RECOVERY_SUCCESS"
+                    );
+                } catch (Exception ignore) {
+                    // Không chặn flow nếu gửi notif thất bại
+                }
+            } catch (Exception e) {
+                System.err.println("Không thể auto recover quỹ " + fund.getFundId() + ": " + e.getMessage());
+            }
         }
     }
 

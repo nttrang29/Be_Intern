@@ -32,7 +32,7 @@ public class FundResponse {
     private LocalDate startDate;
     private LocalDate endDate;
     private String note;
-    
+
     // Reminder
     private Boolean reminderEnabled;
     private String reminderType;
@@ -41,7 +41,7 @@ public class FundResponse {
     private Integer reminderDayOfMonth;
     private Integer reminderMonth;
     private Integer reminderDay;
-    
+
     // Auto Deposit
     private Boolean autoDepositEnabled;
     private String autoDepositType;
@@ -55,10 +55,13 @@ public class FundResponse {
     private Integer autoDepositDay;
     private BigDecimal autoDepositAmount;
     private LocalDateTime autoDepositStartAt;
-    
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
+
+    private BigDecimal pendingAutoTopupAmount;
+    private LocalDateTime pendingAutoTopupAt;
+
     // Thành viên (cho quỹ nhóm)
     private List<FundMemberResponse> members;
     private Integer memberCount;
@@ -78,10 +81,10 @@ public class FundResponse {
         response.setHasDeadline(fund.getHasDeadline());
         response.setTargetAmount(fund.getTargetAmount());
         response.setCurrentAmount(fund.getCurrentAmount());
-        
+
         // Tính % hoàn thành
-        if (fund.getHasDeadline() && fund.getTargetAmount() != null && 
-            fund.getTargetAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (fund.getHasDeadline() && fund.getTargetAmount() != null &&
+                fund.getTargetAmount().compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal percentage = fund.getCurrentAmount()
                     .divide(fund.getTargetAmount(), 4, java.math.RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100));
@@ -89,13 +92,13 @@ public class FundResponse {
         } else {
             response.setProgressPercentage(BigDecimal.ZERO);
         }
-        
+
         response.setFrequency(fund.getFrequency() != null ? fund.getFrequency().name() : null);
         response.setAmountPerPeriod(fund.getAmountPerPeriod());
         response.setStartDate(fund.getStartDate());
         response.setEndDate(fund.getEndDate());
         response.setNote(fund.getNote());
-        
+
         // Reminder
         response.setReminderEnabled(fund.getReminderEnabled());
         response.setReminderType(fund.getReminderType() != null ? fund.getReminderType().name() : null);
@@ -104,7 +107,7 @@ public class FundResponse {
         response.setReminderDayOfMonth(fund.getReminderDayOfMonth());
         response.setReminderMonth(fund.getReminderMonth());
         response.setReminderDay(fund.getReminderDay());
-        
+
         // Auto Deposit
         response.setAutoDepositEnabled(fund.getAutoDepositEnabled());
         // autoDepositType không còn sử dụng nữa (để null)
@@ -121,10 +124,13 @@ public class FundResponse {
         response.setAutoDepositDay(fund.getAutoDepositDay());
         response.setAutoDepositAmount(fund.getAutoDepositAmount());
         response.setAutoDepositStartAt(fund.getAutoDepositStartAt());
-        
+
         response.setCreatedAt(fund.getCreatedAt());
         response.setUpdatedAt(fund.getUpdatedAt());
-        
+
+        response.setPendingAutoTopupAmount(fund.getPendingAutoTopupAmount());
+        response.setPendingAutoTopupAt(fund.getPendingAutoTopupAt());
+
         return response;
     }
 
@@ -254,5 +260,11 @@ public class FundResponse {
 
     public Integer getMemberCount() { return memberCount; }
     public void setMemberCount(Integer memberCount) { this.memberCount = memberCount; }
+
+    public BigDecimal getPendingAutoTopupAmount() { return pendingAutoTopupAmount; }
+    public void setPendingAutoTopupAmount(BigDecimal pendingAutoTopupAmount) { this.pendingAutoTopupAmount = pendingAutoTopupAmount; }
+
+    public LocalDateTime getPendingAutoTopupAt() { return pendingAutoTopupAt; }
+    public void setPendingAutoTopupAt(LocalDateTime pendingAutoTopupAt) { this.pendingAutoTopupAt = pendingAutoTopupAt; }
 }
 

@@ -42,6 +42,7 @@ public interface FundMemberRepository extends JpaRepository<FundMember, Long> {
         LEFT JOIN FETCH fm.fund.targetWallet
         LEFT JOIN FETCH fm.fund.sourceWallet
         WHERE fm.user.userId = :userId
+          AND (fm.fund.deleted = false OR fm.fund.deleted IS NULL)
           AND fm.role = 'CONTRIBUTOR'
         ORDER BY fm.fund.createdAt DESC
         """)

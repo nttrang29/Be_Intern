@@ -5,6 +5,7 @@ import { useWalletData } from "../../contexts/WalletDataContext";
 import { useToast } from "../common/Toast/ToastContext";
 import ConfirmModal from "../common/Modal/ConfirmModal";
 import { formatMoney } from "../../utils/formatMoney";
+import { formatVietnamDate } from "../../utils/dateFormat";
 import ReminderBlock from "./ReminderBlock";
 import AutoTopupBlock from "./AutoTopupBlock";
 import "../../styles/components/funds/FundDetail.css";
@@ -38,7 +39,8 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
   const { wallets, loadWallets } = useWalletData();
   const { showToast } = useToast();
   
-  const [activeTab, setActiveTab] = useState(defaultTab); // info | edit | deposit | withdraw | warnings | history
+  const normalizedDefaultTab = defaultTab === "warnings" ? "info" : defaultTab;
+  const [activeTab, setActiveTab] = useState(normalizedDefaultTab); // info | edit | deposit | withdraw | history
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [form, setForm] = useState(() => buildFormState(fund));
@@ -89,7 +91,8 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
 
   // Khi chọn quỹ khác hoặc defaultTab thay đổi
   useEffect(() => {
-    setActiveTab(defaultTab);
+    const nextTab = defaultTab === "warnings" ? "info" : defaultTab;
+    setActiveTab(nextTab);
     setForm(buildFormState(fund));
     setSelectedCurrency(fund.currency || "VND");
     setSelectedSourceWalletId(fund.sourceWalletId || "");
@@ -629,31 +632,6 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
           </button>
           
           <button
-            onClick={() => setActiveTab("warnings")}
-            style={{
-              flex: '1 1 auto',
-              minWidth: '130px',
-              padding: '0.625rem 1rem',
-              border: 'none',
-              background: activeTab === "warnings" ? '#fff' : 'transparent',
-              color: activeTab === "warnings" ? '#0d6efd' : '#6c757d',
-              fontWeight: activeTab === "warnings" ? '600' : '500',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              transition: 'all 0.2s ease',
-              boxShadow: activeTab === "warnings" ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none'
-            }}
-          >
-            <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: '1rem' }}></i>
-            <span>Cảnh báo</span>
-          </button>
-          
-          <button
             onClick={() => setActiveTab("history")}
             style={{
               flex: '1 1 auto',
@@ -784,13 +762,13 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
                       <div>
                         <label>Ngày bắt đầu</label>
                         <div style={{ padding: '0.5rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                          {fund.startDate ? new Date(fund.startDate).toLocaleDateString('vi-VN') : "Chưa thiết lập"}
+                          {fund.startDate ? formatVietnamDate(fund.startDate) : "Chưa thiết lập"}
                         </div>
                       </div>
                       <div>
                         <label>Ngày kết thúc</label>
                         <div style={{ padding: '0.5rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                          {fund.endDate ? new Date(fund.endDate).toLocaleDateString('vi-VN') : "Chưa thiết lập"}
+                          {fund.endDate ? formatVietnamDate(fund.endDate) : "Chưa thiết lập"}
                         </div>
                       </div>
                     </div>
@@ -1021,7 +999,7 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
                                 return '';
                             }
                             
-                            return endDate.toLocaleDateString('vi-VN');
+                            return formatVietnamDate(endDate);
                           })()}
                           disabled
                           style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
@@ -1229,7 +1207,7 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
                     }}>
                       <i className="bi bi-info-circle-fill" style={{ fontSize: '1.25rem', color: '#10b981' }}></i>
                       <div style={{ fontSize: '0.875rem', color: '#065f46' }}>
-                        <strong>Lưu ý:</strong> Lần nạp tiếp theo theo lịch là <strong>{depositStatus.nextDepositDate.toLocaleDateString('vi-VN')}</strong>. 
+                        <strong>Lưu ý:</strong> Lần nạp tiếp theo theo lịch là <strong>{formatVietnamDate(depositStatus.nextDepositDate)}</strong>. 
                         Bạn vẫn có thể nạp thủ công bất kỳ lúc nào.
                       </div>
                     </div>
@@ -1930,307 +1908,6 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
             </div>
           )}
 
-          {/* TAB 5: CẢNH BÁO */}
-          {activeTab === "warnings" && (
-            <div>
-              <h6 className="mb-3 text-muted">Theo dõi tiến độ và cảnh báo</h6>
-              
-              {(() => {
-                const sourceWallet = wallets.find(w => w.id === fund.sourceWalletId);
-                const warnings = [];
-                
-                // CẢNH BÁO 1: Tự động nạp tiền nhưng số dư ví không đủ
-                if (fund.autoDepositEnabled && fund.autoDepositAmount && sourceWallet) {
-                  if (sourceWallet.balance < fund.autoDepositAmount) {
-                    warnings.push({
-                      type: 'auto-insufficient',
-                      title: 'Số dư ví không đủ cho lần nạp tự động tiếp theo',
-                      severity: 'danger',
-                      data: {
-                        needed: fund.autoDepositAmount,
-                        available: sourceWallet.balance,
-                        shortage: fund.autoDepositAmount - sourceWallet.balance
-                      }
-                    });
-                  }
-                }
-                
-                // CẢNH BÁO 2: Tiến độ chậm so với kế hoạch (nếu có frequency và amountPerPeriod)
-                if (fund.hasTerm && fund.target && fund.startDate && fund.frequency && fund.amountPerPeriod) {
-                  const daysSinceStart = Math.floor((new Date() - new Date(fund.startDate)) / (1000 * 60 * 60 * 24));
-                  const periodsElapsed = fund.frequency === 'DAILY' ? daysSinceStart :
-                                        fund.frequency === 'WEEKLY' ? Math.floor(daysSinceStart / 7) :
-                                        fund.frequency === 'MONTHLY' ? Math.floor(daysSinceStart / 30) :
-                                        Math.floor(daysSinceStart / 365);
-                  
-                  const expectedAmount = Math.min(periodsElapsed * fund.amountPerPeriod, fund.target);
-                  
-                  if (fund.current < expectedAmount * 0.8) { // Nếu chậm hơn 20%
-                    warnings.push({
-                      type: 'behind-schedule',
-                      title: 'Tiến độ nạp tiền chậm hơn kế hoạch',
-                      severity: 'warning',
-                      data: {
-                        current: fund.current,
-                        expected: expectedAmount,
-                        behind: expectedAmount - fund.current
-                      }
-                    });
-                  }
-                }
-                
-                // CẢNH BÁO 3: Còn nhiều tiền cần nạp nhưng thời gian sắp hết
-                if (fund.hasTerm && fund.target && fund.endDate) {
-                  const daysRemaining = Math.floor((new Date(fund.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-                  const amountRemaining = fund.target - fund.current;
-                  
-                  if (daysRemaining > 0 && daysRemaining < 30 && amountRemaining > fund.current * 0.5) {
-                    warnings.push({
-                      type: 'deadline-approaching',
-                      title: 'Sắp đến hạn nhưng còn nhiều tiền cần nạp',
-                      severity: 'warning',
-                      data: {
-                        daysRemaining,
-                        amountRemaining,
-                        dailyNeeded: Math.ceil(amountRemaining / daysRemaining)
-                      }
-                    });
-                  }
-                }
-                
-                // Hiển thị cảnh báo hoặc thông báo OK
-                if (warnings.length === 0) {
-                  return (
-                    <div style={{
-                      padding: '3rem 2rem',
-                      backgroundColor: '#f0fdf4',
-                      border: '2px solid #10b981',
-                      borderRadius: '12px',
-                      textAlign: 'center'
-                    }}>
-                      <i className="bi bi-check-circle-fill" style={{ fontSize: '4rem', color: '#10b981', marginBottom: '1rem' }}></i>
-                      <h5 style={{ color: '#10b981', marginBottom: '0.5rem' }}>Mọi thứ đều ổn!</h5>
-                      <p className="text-muted mb-0">
-                        Không có cảnh báo nào. Quỹ của bạn đang hoạt động tốt.
-                      </p>
-                    </div>
-                  );
-                }
-                
-                // Hiển thị danh sách cảnh báo
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {warnings.map((warning, idx) => {
-                      const isDanger = warning.severity === 'danger';
-                      const borderColor = isDanger ? '#ef4444' : '#f59e0b';
-                      const iconColor = isDanger ? '#ef4444' : '#f59e0b';
-                      const iconBg = isDanger ? '#fee2e2' : '#fed7aa';
-                      
-                      return (
-                        <div key={idx} style={{
-                          padding: '1.25rem',
-                          backgroundColor: '#fff',
-                          border: '1px solid #e5e7eb',
-                          borderLeft: `5px solid ${borderColor}`,
-                          borderRadius: '12px',
-                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
-                          e.currentTarget.style.transform = 'translateY(0)';
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'start', gap: '1rem', marginBottom: '1rem' }}>
-                            {/* Icon Circle */}
-                            <div style={{ 
-                              flexShrink: 0,
-                              width: '48px',
-                              height: '48px',
-                              borderRadius: '50%',
-                              backgroundColor: iconBg,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}>
-                              <i className="bi bi-exclamation-triangle-fill" style={{ 
-                                fontSize: '1.25rem', 
-                                color: iconColor
-                              }}></i>
-                            </div>
-                            
-                            <div style={{ flex: 1 }}>
-                              {/* Title với severity badge */}
-                              <div style={{ marginBottom: '0.75rem' }}>
-                                <div style={{ 
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                  padding: '0.375rem 0.75rem',
-                                  backgroundColor: iconBg,
-                                  border: `1px solid ${borderColor}`,
-                                  borderRadius: '12px',
-                                  fontSize: '0.875rem',
-                                  fontWeight: '600',
-                                  color: iconColor,
-                                  marginBottom: '0.5rem'
-                                }}>
-                                  <i className="bi bi-exclamation-circle-fill" style={{ fontSize: '0.875rem' }}></i>
-                                  {isDanger ? 'Nghiêm trọng' : 'Cảnh báo'}
-                                </div>
-                                <h6 style={{ color: '#111827', marginBottom: '0', fontWeight: '600', fontSize: '1rem' }}>
-                                  {warning.title}
-                                </h6>
-                              </div>
-                              
-                              {warning.type === 'auto-insufficient' && (
-                                <>
-                                  <div style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.5rem' }}>
-                                    Lần nạp tự động tiếp theo cần: <strong>{formatMoney(warning.data.needed, fund.currency)}</strong>
-                                  </div>
-                                  <div style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.5rem' }}>
-                                    Số dư ví nguồn hiện tại: <strong>{formatMoney(warning.data.available, fund.currency)}</strong>
-                                  </div>
-                                  <div style={{ 
-                                    marginTop: '0.75rem',
-                                    padding: '1rem',
-                                    background: `linear-gradient(135deg, ${isDanger ? '#fef2f2' : '#fef3c7'} 0%, ${isDanger ? '#fee2e2' : '#fed7aa'} 100%)`,
-                                    border: `1px solid ${borderColor}`,
-                                    borderRadius: '8px'
-                                  }}>
-                                    <div style={{ 
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.5rem',
-                                      fontSize: '1rem',
-                                      color: iconColor, 
-                                      fontWeight: '700'
-                                    }}>
-                                      <i className="bi bi-cash-stack"></i>
-                                      Cần nạp thêm: {formatMoney(warning.data.shortage, fund.currency)}
-                                    </div>
-                                  </div>
-                                  <div style={{ 
-                                    marginTop: '0.75rem',
-                                    padding: '0.75rem',
-                                    backgroundColor: '#f0fdf4',
-                                    border: '1px solid #86efac',
-                                    borderRadius: '8px',
-                                    fontSize: '0.875rem',
-                                    display: 'flex',
-                                    gap: '0.5rem'
-                                  }}>
-                                    <i className="bi bi-lightbulb-fill" style={{ color: '#10b981', flexShrink: 0 }}></i>
-                                    <div>
-                                      <strong>Khuyến nghị:</strong> Nạp tiền vào ví "{fund.sourceWalletName}" để đảm bảo lịch tự động nạp tiền hoạt động bình thường.
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                              
-                              {warning.type === 'behind-schedule' && (
-                                <>
-                                  <div style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.5rem' }}>
-                                    Số dư hiện tại: <strong>{formatMoney(warning.data.current, fund.currency)}</strong>
-                                  </div>
-                                  <div style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.5rem' }}>
-                                    Số dư mong đợi: <strong>{formatMoney(warning.data.expected, fund.currency)}</strong>
-                                  </div>
-                                  <div style={{ 
-                                    marginTop: '0.75rem',
-                                    padding: '1rem',
-                                    background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
-                                    border: `1px solid ${borderColor}`,
-                                    borderRadius: '8px'
-                                  }}>
-                                    <div style={{ 
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.5rem',
-                                      fontSize: '1rem',
-                                      color: iconColor, 
-                                      fontWeight: '700'
-                                    }}>
-                                      <i className="bi bi-graph-down-arrow"></i>
-                                      Chậm tiến độ: {formatMoney(warning.data.behind, fund.currency)}
-                                    </div>
-                                  </div>
-                                  <div style={{ 
-                                    marginTop: '0.75rem',
-                                    padding: '0.75rem',
-                                    backgroundColor: '#f0fdf4',
-                                    border: '1px solid #86efac',
-                                    borderRadius: '8px',
-                                    fontSize: '0.875rem',
-                                    display: 'flex',
-                                    gap: '0.5rem'
-                                  }}>
-                                    <i className="bi bi-lightbulb-fill" style={{ color: '#10b981', flexShrink: 0 }}></i>
-                                    <div>
-                                      <strong>Khuyến nghị:</strong> Cần nạp thêm {formatMoney(warning.data.behind, fund.currency)} để bắt kịp tiến độ theo kế hoạch.
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                              
-                              {warning.type === 'deadline-approaching' && (
-                                <>
-                                  <div style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.5rem' }}>
-                                    Thời gian còn lại: <strong>{warning.data.daysRemaining} ngày</strong>
-                                  </div>
-                                  <div style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.5rem' }}>
-                                    Số tiền còn thiếu: <strong>{formatMoney(warning.data.amountRemaining, fund.currency)}</strong>
-                                  </div>
-                                  <div style={{ 
-                                    marginTop: '0.75rem',
-                                    padding: '1rem',
-                                    background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
-                                    border: `1px solid ${borderColor}`,
-                                    borderRadius: '8px'
-                                  }}>
-                                    <div style={{ 
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.5rem',
-                                      fontSize: '1rem',
-                                      color: iconColor, 
-                                      fontWeight: '700'
-                                    }}>
-                                      <i className="bi bi-calendar-check"></i>
-                                      Cần nạp: {formatMoney(warning.data.dailyNeeded, fund.currency)}/ngày
-                                    </div>
-                                  </div>
-                                  <div style={{ 
-                                    marginTop: '0.75rem',
-                                    padding: '0.75rem',
-                                    backgroundColor: '#f0fdf4',
-                                    border: '1px solid #86efac',
-                                    borderRadius: '8px',
-                                    fontSize: '0.875rem',
-                                    display: 'flex',
-                                    gap: '0.5rem'
-                                  }}>
-                                    <i className="bi bi-lightbulb-fill" style={{ color: '#10b981', flexShrink: 0 }}></i>
-                                    <div>
-                                      <strong>Khuyến nghị:</strong> Quỹ sắp đến hạn nhưng còn nhiều tiền cần nạp. Hãy tăng tốc độ tiết kiệm!
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
           {/* TAB 6: LỊCH SỬ */}
           {activeTab === "history" && (
             <div>
@@ -2646,12 +2323,12 @@ export default function FundDetailView({ fund, onBack, onUpdateFund, defaultTab 
               <div style={{ fontSize: '0.875rem', color: '#374151' }}>
                 {fund.startDate && (
                   <div style={{ marginBottom: '0.25rem' }}>
-                    <strong>Bắt đầu:</strong> {new Date(fund.startDate).toLocaleDateString('vi-VN')}
+                    <strong>Bắt đầu:</strong> {formatVietnamDate(fund.startDate)}
                   </div>
                 )}
                 {fund.endDate && (
                   <div>
-                    <strong>Kết thúc:</strong> {new Date(fund.endDate).toLocaleDateString('vi-VN')}
+                    <strong>Kết thúc:</strong> {formatVietnamDate(fund.endDate)}
                   </div>
                 )}
               </div>

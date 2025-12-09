@@ -48,6 +48,11 @@ public class EmailService {
         }
     }
 
+    // ====== Gửi email tùy chỉnh ======
+    public void sendEmail(String to, String subject, String content) {
+        send(to, subject, content);
+    }
+
     // ====== Gửi OTP đăng ký ======
     public void sendOtpRegisterEmail(String email, String otp) {
         String subject = "[MyWallet] Mã xác thực đăng ký tài khoản";
@@ -82,8 +87,8 @@ public class EmailService {
     }
 
     // ====== Gửi thông báo feedback mới cho admin ======
-    public void sendFeedbackNotificationEmail(String adminEmail, String userName, String userEmail, 
-                                             String feedbackType, String subject, String message) {
+    public void sendFeedbackNotificationEmail(String adminEmail, String userName, String userEmail,
+                                              String feedbackType, String subject, String message) {
         String emailSubject = "[MyWallet] Phản hồi mới từ người dùng: " + subject;
         String emailContent = "Xin chào Admin,\n\n"
                 + "Có phản hồi mới từ người dùng:\n\n"
@@ -97,7 +102,7 @@ public class EmailService {
     }
 
     // ====== Gửi nhắc nhở nạp quỹ ======
-    public void sendFundReminderEmail(String email, String fullName, String fundName, 
+    public void sendFundReminderEmail(String email, String fullName, String fundName,
                                       String currentAmount, String targetAmount, String currency) {
         String subject = "[MyWallet] 💰 Nhắc nhở nạp quỹ";
         String content = "Xin chào " + fullName + ",\n\n"
@@ -115,8 +120,8 @@ public class EmailService {
 
     // ====== Gửi thông báo tự động nạp quỹ thành công ======
     public void sendAutoDepositSuccessEmail(String email, String fullName, String fundName,
-                                           String depositAmount, String newBalance, String currency,
-                                           String sourceWalletName) {
+                                            String depositAmount, String newBalance, String currency,
+                                            String sourceWalletName) {
         String subject = "[MyWallet] ✅ Tự động nạp quỹ thành công";
         String content = "Xin chào " + fullName + ",\n\n"
                 + "Hệ thống đã tự động nạp tiền vào quỹ của bạn!\n\n"
