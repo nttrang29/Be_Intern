@@ -159,5 +159,40 @@ public class EmailService {
                 + "Trân trọng,\nĐội ngũ MyWallet";
         send(email, subject, content);
     }
+
+    // ====== Gửi mã 2FA khi setup ======
+    public void send2FASetupEmail(String email, String fullName, String code) {
+        String subject = "[MyWallet] Mã xác thực 2 lớp (2FA)";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Mã xác thực 2 lớp (2FA) của bạn là: " + code + "\n"
+                + "Mã này sẽ được sử dụng để xác thực khi đăng nhập.\n\n"
+                + "Vui lòng lưu giữ mã này cẩn thận và không chia sẻ với ai.\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
+
+    // ====== Gửi mã 2FA khi đăng nhập ======
+    public void send2FALoginEmail(String email, String fullName, String code) {
+        String subject = "[MyWallet] Mã xác thực 2 lớp đăng nhập";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Mã xác thực 2 lớp để đăng nhập là: " + code + "\n"
+                + "Mã có hiệu lực trong 1 phút.\n\n"
+                + "Nếu bạn không thực hiện đăng nhập, vui lòng bỏ qua email này.\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
+
+    // ====== Gửi mã 2FA tạm thời khi quên mã ======
+    public void send2FATemporaryEmail(String email, String fullName, String code) {
+        String subject = "[MyWallet] Mã xác thực 2 lớp tạm thời";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Bạn đã yêu cầu lấy mã xác thực 2 lớp tạm thời.\n\n"
+                + "Mã xác thực tạm thời của bạn là: " + code + "\n"
+                + "Mã này sẽ thay thế mã pin cũ của bạn. Vui lòng sử dụng mã này để đăng nhập.\n\n"
+                + "⚠️ Lưu ý: Sau khi đăng nhập thành công, bạn nên vào Cài đặt để tạo mã pin mới cho tài khoản.\n\n"
+                + "Nếu bạn không thực hiện yêu cầu này, vui lòng liên hệ hỗ trợ ngay.\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
 }
 

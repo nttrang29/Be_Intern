@@ -195,8 +195,13 @@ public class AuthServiceImpl implements AuthService {
         user.setLastActiveAt(LocalDateTime.now());
         userRepository.save(user);
 
+        // Kiểm tra nếu user đã bật 2FA
+        boolean requires2FA = user.isTwoFactorEnabled();
+        
+        // Tạo token (nếu cần 2FA, token này sẽ được verify sau)
         String token = jwtUtil.generateToken(new CustomUserDetails(user));
-        return new LoginResult(user.getUserId(), token);
+        
+        return new LoginResult(user.getUserId(), token, requires2FA);
     }
 
     // 4) QUÊN MẬT KHẨU – REQUEST OTP
@@ -399,8 +404,11 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.save(user);
 
+        // Kiểm tra nếu user đã bật 2FA
+        boolean requires2FA = user.isTwoFactorEnabled();
+        
         String token = jwtUtil.generateToken(new CustomUserDetails(user));
-        return new LoginResult(user.getUserId(), token);
+        return new LoginResult(user.getUserId(), token, requires2FA);
     }
 
     // 9) SET FIRST PASSWORD (Google)
@@ -430,5 +438,67 @@ public class AuthServiceImpl implements AuthService {
         user.setFirstLogin(false);
 
         userRepository.save(user);
+    }
+
+    // 10) VERIFY 2FA SAU KHI LOGIN
+    @Override
+    @Transactional
+    public String verify2FA(Verify2FARequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        String code = request.getCode();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND,
+                        "Email không tồn tại"));
+
+        if (!user.isTwoFactorEnabled()) {
+            throw new ApiException(ApiErrorCode.INVALID_CREDENTIALS,
+                    "Tài khoản chưa bật xác thực 2 lớp");
+        }
+
+        // Kiểm tra mã pin với mã đã hash trong database
+        if (user.getTwoFactorSecret() == null || user.getTwoFactorSecret().isEmpty()) {
+            throw new ApiException(ApiErrorCode.INVALID_CREDENTIALS,
+                    "Mã pin 2FA chưa được thiết lập");
+        }
+
+        // So sánh mã pin user nhập với mã đã hash
+        if (!passwordEncoder.matches(code, user.getTwoFactorSecret())) {
+            throw new ApiException(ApiErrorCode.OTP_INVALID, "Mã pin không đúng");
+        }
+
+        // Tạo token cuối cùng cho user
+        return jwtUtil.generateToken(new CustomUserDetails(user));
+    }
+
+    // 11) RESET MÃ 2FA TẠM THỜI (khi quên mã)
+    @Override
+    @Transactional
+    public void resetTemporary2FA(String email) {
+        String emailLower = email.trim().toLowerCase();
+
+        User user = userRepository.findByEmail(emailLower)
+                .orElseThrow(() -> new ApiException(ApiErrorCode.USER_NOT_FOUND,
+                        "Email không tồn tại trong hệ thống"));
+
+        if (user.isDeleted()) {
+            throw new ApiException(ApiErrorCode.USER_DELETED,
+                    "Tài khoản đã bị xóa hoặc không hoạt động 30 ngày");
+        }
+
+        if (!user.isTwoFactorEnabled()) {
+            throw new ApiException(ApiErrorCode.INVALID_CREDENTIALS,
+                    "Tài khoản chưa bật xác thực 2 lớp");
+        }
+
+        // Tạo mã pin tạm thời mới (6 số)
+        String temporaryCode = otpUtil.generateOtp();
+
+        // Lưu mã pin mới đã hash vào database
+        user.setTwoFactorSecret(passwordEncoder.encode(temporaryCode));
+        userRepository.save(user);
+
+        // Gửi email mã tạm thời
+        emailService.send2FATemporaryEmail(user.getEmail(), user.getFullName(), temporaryCode);
     }
 }

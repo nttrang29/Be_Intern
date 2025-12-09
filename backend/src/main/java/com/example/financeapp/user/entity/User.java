@@ -68,6 +68,13 @@ public class User {
     @Column(name = "auto_backup_enabled")
     private Boolean autoBackupEnabled = false; // Mặc định tắt auto backup (Boolean để tránh lỗi null với user cũ)
 
+    // ===== 2FA (Xác thực 2 lớp) =====
+    @Column(name = "two_factor_enabled")
+    private Boolean twoFactorEnabled = false; // Trạng thái bật/tắt 2FA (Boolean để tránh lỗi null với user cũ)
+
+    @Column(name = "two_factor_secret", length = 255)
+    private String twoFactorSecret; // Mã pin 2FA đã được hash (BCrypt hash ~60 ký tự)
+
     // ===== Auditing =====
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -217,6 +224,22 @@ public class User {
 
     public void setAutoBackupEnabled(Boolean autoBackupEnabled) {
         this.autoBackupEnabled = autoBackupEnabled != null ? autoBackupEnabled : false;
+    }
+
+    public boolean isTwoFactorEnabled() {
+        return twoFactorEnabled != null ? twoFactorEnabled : false; // Trả về false nếu null (user cũ)
+    }
+
+    public void setTwoFactorEnabled(Boolean twoFactorEnabled) {
+        this.twoFactorEnabled = twoFactorEnabled != null ? twoFactorEnabled : false;
+    }
+
+    public String getTwoFactorSecret() {
+        return twoFactorSecret;
+    }
+
+    public void setTwoFactorSecret(String twoFactorSecret) {
+        this.twoFactorSecret = twoFactorSecret;
     }
 
     public LocalDateTime getCreatedAt() {

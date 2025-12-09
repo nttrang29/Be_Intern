@@ -13,4 +13,6 @@ public interface AuthService {
     void changePassword(ChangePasswordRequest request, CustomUserDetails currentUser);
     LoginResult loginWithGoogle(GoogleLoginRequest request);
     void setFirstPassword(FirstPasswordRequest request, CustomUserDetails currentUser);
+    String verify2FA(Verify2FARequest request);
+    void resetTemporary2FA(String email);
 }

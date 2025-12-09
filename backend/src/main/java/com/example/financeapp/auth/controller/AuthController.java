@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -68,7 +69,11 @@ public class AuthController {
                     Collections.singletonMap("provider", "local")
             );
 
-            return ResponseEntity.ok(new AuthTokenResponse(result.getToken()));
+            // Trả về response với requires2FA
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", result.getToken());
+            response.put("requires2FA", result.isRequires2FA());
+            return ResponseEntity.ok(response);
         } catch (RuntimeException ex) {
             recordLoginAttempt(
                     null,
@@ -158,7 +163,11 @@ public class AuthController {
                     null,
                     Collections.singletonMap("provider", "google")
             );
-            return ResponseEntity.ok(new AuthTokenResponse(result.getToken()));
+            // Google login cũng cần kiểm tra 2FA
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", result.getToken());
+            response.put("requires2FA", result.isRequires2FA());
+            return ResponseEntity.ok(response);
         } catch (RuntimeException ex) {
             recordLoginAttempt(
                     null,
@@ -171,6 +180,20 @@ public class AuthController {
             );
             throw ex;
         }
+    }
+
+    // 10) Xác thực 2FA sau khi login
+    @PostMapping("/verify-2fa")
+    public ResponseEntity<?> verify2FA(@Valid @RequestBody Verify2FARequest request) {
+        String token = authService.verify2FA(request);
+        return ResponseEntity.ok(new AuthTokenResponse(token));
+    }
+
+    // 11) Reset mã 2FA tạm thời (khi quên mã) - không cần authentication
+    @PostMapping("/reset-2fa-temporary")
+    public ResponseEntity<?> resetTemporary2FA(@Valid @RequestBody Verify2FARequest request) {
+        authService.resetTemporary2FA(request.getEmail());
+        return ResponseEntity.ok(new SimpleMessageResponse("Đã gửi mã xác thực tạm thời tới email của bạn"));
     }
 
     private void recordLoginAttempt(
