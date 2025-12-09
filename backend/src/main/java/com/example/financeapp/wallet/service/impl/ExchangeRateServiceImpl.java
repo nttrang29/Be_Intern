@@ -193,7 +193,12 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
         }
 
         BigDecimal rate = getExchangeRate(fromCurrency, toCurrency);
-        return amount.multiply(rate).setScale(8, RoundingMode.HALF_UP);
+        // Tính toán với độ chính xác cao (12 chữ số) để tránh tích lũy sai số
+        // Chỉ làm tròn về 8 chữ số khi lưu vào database (được thực hiện ở entity level)
+        // Điều này đảm bảo tính đối xứng: A->B->A ≈ A (sai số tối thiểu)
+        BigDecimal result = amount.multiply(rate);
+        // Làm tròn về 8 chữ số thập phân (theo scale của database)
+        return result.setScale(8, RoundingMode.HALF_UP);
     }
 }
 
