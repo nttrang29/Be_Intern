@@ -1,6 +1,7 @@
 package com.example.financeapp.security;
 
 import com.example.financeapp.config.JwtUtil;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,27 +42,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt)) {
-                String email = jwtUtil.extractEmail(jwt);
-                
-                if (email != null && jwtUtil.validateToken(jwt, email)) {
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                try {
+                    // Sử dụng extractEmailSafely để tránh throw exception khi token expired
+                    String email = jwtUtil.extractEmailSafely(jwt);
 
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails,
-                                    null,
-                                    userDetails.getAuthorities()
-                            );
+                    if (email != null && jwtUtil.validateToken(jwt, email)) {
+                        UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails,
+                                        null,
+                                        userDetails.getAuthorities()
+                                );
 
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                        authentication.setDetails(
+                                new WebAuthenticationDetailsSource().buildDetails(request)
+                        );
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    } else {
+                        // Token không hợp lệ hoặc đã hết hạn
+                        if (jwtUtil.isTokenExpired(jwt)) {
+                            log.debug("JWT token đã hết hạn cho request: {}", request.getRequestURI());
+                        } else {
+                            log.debug("JWT token không hợp lệ cho request: {}", request.getRequestURI());
+                        }
+                    }
+                } catch (ExpiredJwtException ex) {
+                    // Token đã hết hạn - log nhưng không throw để request vẫn tiếp tục
+                    // Spring Security sẽ xử lý authentication failure sau đó
+                    log.debug("JWT token đã hết hạn: {}", ex.getMessage());
+                } catch (Exception ex) {
+                    // Các lỗi khác (malformed token, etc.)
+                    log.debug("Lỗi xử lý JWT token: {}", ex.getMessage());
                 }
             }
         } catch (Exception ex) {
-            // không ném lỗi ra ngoài để tránh vỡ flow – chỉ log
+            // Lỗi không mong đợi - log nhưng không throw để tránh vỡ flow
             log.error("Không thể thiết lập xác thực cho người dùng trong SecurityContext", ex);
         }
 

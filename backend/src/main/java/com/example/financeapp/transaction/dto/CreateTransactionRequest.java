@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 public class CreateTransactionRequest {
 
     @NotNull(message = "Số tiền không được để trống")
-    @DecimalMin(value = "0.01", message = "Số tiền phải lớn hơn 0")
+    @DecimalMin(value = "0.00000001", message = "Số tiền phải lớn hơn 0")
     private BigDecimal amount;
 
     @NotNull(message = "Ngày giao dịch không được để trống")

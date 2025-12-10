@@ -1,8 +1,11 @@
 package com.example.financeapp.config;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,7 +69,7 @@ public class JwtUtil {
                 .compact();
     }
 
-    // ✅ Lấy email từ token
+    // ✅ Lấy email từ token (throw exception nếu token invalid hoặc expired)
     public String extractEmail(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
@@ -76,19 +79,56 @@ public class JwtUtil {
         return claims.getSubject();
     }
 
-    // ✅ Kiểm tra token hết hạn chưa
-    private boolean isTokenExpired(String token) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-        return claims.getExpiration().before(new Date());
+    // ✅ Lấy email từ token một cách an toàn (không throw exception khi expired)
+    // Trả về null nếu token expired hoặc invalid
+    public String extractEmailSafely(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            return claims.getSubject();
+        } catch (ExpiredJwtException e) {
+            // Token đã hết hạn, nhưng vẫn có thể lấy được email từ claims
+            return e.getClaims().getSubject();
+        } catch (MalformedJwtException | UnsupportedJwtException | IllegalArgumentException e) {
+            // Token không hợp lệ
+            return null;
+        }
+    }
+
+    // ✅ Kiểm tra token có hết hạn không (không throw exception)
+    public boolean isTokenExpired(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            return claims.getExpiration().before(new Date());
+        } catch (ExpiredJwtException e) {
+            // Token đã hết hạn, có thể lấy expiration từ exception
+            return true;
+        } catch (Exception e) {
+            // Token không hợp lệ, coi như đã hết hạn
+            return true;
+        }
     }
 
     // ✅ Kiểm tra token hợp lệ
     public boolean validateToken(String token, String email) {
-        String extractedEmail = extractEmail(token);
-        return (extractedEmail.equals(email) && !isTokenExpired(token));
+        try {
+            String extractedEmail = extractEmail(token);
+            if (extractedEmail == null || !extractedEmail.equals(email)) {
+                return false;
+            }
+            // Nếu extractEmail thành công, token chưa hết hạn (vì parseClaimsJws sẽ throw nếu expired)
+            return true;
+        } catch (ExpiredJwtException e) {
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

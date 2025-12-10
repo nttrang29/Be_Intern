@@ -16,6 +16,8 @@ public class MergeWalletRequest {
     @Pattern(regexp = "^[A-Z]{3}$", message = "Mã tiền tệ phải đúng định dạng ISO (VD: VND, USD)")
     private String targetCurrency; // Loại tiền tệ sau khi gộp (VD: "VND", "USD")
 
+    private Boolean setTargetAsDefault; // Có đặt ví đích làm ví mặc định không (null = tự động chuyển từ source nếu source là default)
+
     // Constructors
     public MergeWalletRequest() {}
 
@@ -39,6 +41,14 @@ public class MergeWalletRequest {
 
     public void setTargetCurrency(String targetCurrency) {
         this.targetCurrency = targetCurrency;
+    }
+
+    public Boolean getSetTargetAsDefault() {
+        return setTargetAsDefault;
+    }
+
+    public void setSetTargetAsDefault(Boolean setTargetAsDefault) {
+        this.setTargetAsDefault = setTargetAsDefault;
     }
 }
 
