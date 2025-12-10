@@ -308,6 +308,32 @@ public class FundController {
     }
 
     /**
+     * Tất toán quỹ - rút toàn bộ số tiền còn lại về ví nguồn và đóng quỹ
+     */
+    @PostMapping("/{id}/settle")
+    public ResponseEntity<Map<String, Object>> settleFund(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long fundId
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            FundResponse fund = fundService.settleFund(user.getUserId(), fundId);
+
+            res.put("message", "Tất toán quỹ thành công");
+            res.put("fund", fund);
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
      * Lịch sử giao dịch quỹ
      */
     @GetMapping("/{id}/transactions")

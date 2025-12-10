@@ -69,6 +69,11 @@ public interface FundService {
     FundResponse withdrawFromFund(Long userId, Long fundId, java.math.BigDecimal amount);
 
     /**
+     * Tất toán quỹ - rút toàn bộ số tiền còn lại về ví nguồn và đóng quỹ
+     */
+    FundResponse settleFund(Long userId, Long fundId);
+
+    /**
      * Thử nạp bù tự động cho các quỹ dùng ví nguồn vừa được nạp tiền
      */
     void tryAutoRecoverForWallet(Long walletId);

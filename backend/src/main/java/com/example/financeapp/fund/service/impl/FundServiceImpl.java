@@ -331,6 +331,50 @@ public class FundServiceImpl implements FundService {
         if (request.getAutoDepositEnabled() != null) {
             fund.setAutoDepositEnabled(request.getAutoDepositEnabled());
             if (request.getAutoDepositEnabled()) {
+                // Kiểm tra xem thời gian auto-deposit có thay đổi không
+                boolean timeChanged = false;
+                if (request.getAutoDepositTime() != null && fund.getAutoDepositTime() != null) {
+                    if (!request.getAutoDepositTime().equals(fund.getAutoDepositTime())) {
+                        timeChanged = true;
+                    }
+                } else if (request.getAutoDepositTime() != null || fund.getAutoDepositTime() != null) {
+                    timeChanged = true;
+                }
+
+                // Kiểm tra xem schedule type có thay đổi không
+                boolean scheduleChanged = false;
+                if (request.getAutoDepositScheduleType() != null && fund.getAutoDepositScheduleType() != null) {
+                    if (!request.getAutoDepositScheduleType().equals(fund.getAutoDepositScheduleType())) {
+                        scheduleChanged = true;
+                    }
+                } else if (request.getAutoDepositScheduleType() != null || fund.getAutoDepositScheduleType() != null) {
+                    scheduleChanged = true;
+                }
+
+                // Kiểm tra dayOfWeek/dayOfMonth có thay đổi không
+                boolean dayChanged = false;
+                if (request.getAutoDepositScheduleType() != null) {
+                    if (request.getAutoDepositScheduleType() == com.example.financeapp.fund.entity.ReminderType.WEEKLY) {
+                        if (request.getAutoDepositDayOfWeek() != null && fund.getAutoDepositDayOfWeek() != null) {
+                            if (!request.getAutoDepositDayOfWeek().equals(fund.getAutoDepositDayOfWeek())) {
+                                dayChanged = true;
+                            }
+                        } else if (request.getAutoDepositDayOfWeek() != null || fund.getAutoDepositDayOfWeek() != null) {
+                            dayChanged = true;
+                        }
+                    } else if (request.getAutoDepositScheduleType() == com.example.financeapp.fund.entity.ReminderType.MONTHLY) {
+                        if (request.getAutoDepositDayOfMonth() != null && fund.getAutoDepositDayOfMonth() != null) {
+                            if (!request.getAutoDepositDayOfMonth().equals(fund.getAutoDepositDayOfMonth())) {
+                                dayChanged = true;
+                            }
+                        } else if (request.getAutoDepositDayOfMonth() != null || fund.getAutoDepositDayOfMonth() != null) {
+                            dayChanged = true;
+                        }
+                    }
+                }
+
+                // Nếu thời gian hoặc lịch trình thay đổi, cần đảm bảo lần nạp tiếp theo sử dụng thời gian mới
+                // Bằng cách kiểm tra xem đã nạp trong chu kỳ hiện tại chưa, nếu chưa thì có thể nạp với thời gian mới
                 // Cập nhật thông tin tự động nạp tiền
                 fund.setAutoDepositScheduleType(request.getAutoDepositScheduleType());
                 fund.setAutoDepositTime(request.getAutoDepositTime());
@@ -339,7 +383,13 @@ public class FundServiceImpl implements FundService {
                 fund.setAutoDepositMonth(request.getAutoDepositMonth());
                 fund.setAutoDepositDay(request.getAutoDepositDay());
                 fund.setAutoDepositAmount(request.getAutoDepositAmount());
-                if (request.getAutoDepositStartAt() != null) {
+
+                // Nếu thời gian hoặc lịch trình thay đổi, reset autoDepositStartAt để áp dụng lịch mới
+                if (timeChanged || scheduleChanged || dayChanged) {
+                    // Reset để lần nạp tiếp theo sử dụng thời gian mới
+                    // Nhưng vẫn kiểm tra xem đã nạp trong chu kỳ hiện tại chưa (logic trong query)
+                    fund.setAutoDepositStartAt(null);
+                } else if (request.getAutoDepositStartAt() != null) {
                     fund.setAutoDepositStartAt(request.getAutoDepositStartAt());
                 } else if (fund.getAutoDepositStartAt() == null) {
                     fund.setAutoDepositStartAt(resolveAutoDepositStartAt(
@@ -357,7 +407,6 @@ public class FundServiceImpl implements FundService {
             // Logic cập nhật thành viên sẽ được xử lý riêng
             // Ở đây chỉ validate
         }
-        fund.setAutoDepositStartAt(null);
 
         fund = fundRepository.save(fund);
         return buildFundResponse(fund);
@@ -618,6 +667,71 @@ public class FundServiceImpl implements FundService {
         tx.setType(FundTransactionType.WITHDRAW);
         tx.setStatus(FundTransactionStatus.SUCCESS);
         tx.setMessage("Rút tiền khỏi quỹ");
+        tx.setPerformedBy(performer);
+        fundTransactionRepository.save(tx);
+
+        return buildFundResponse(fund);
+    }
+
+    @Override
+    @Transactional
+    public FundResponse settleFund(Long userId, Long fundId) {
+        Fund fund = fundRepository.findByIdWithRelations(fundId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy quỹ"));
+        ensureNotDeleted(fund);
+
+        // Kiểm tra quyền
+        if (!fund.getOwner().getUserId().equals(userId)) {
+            throw new RuntimeException("Chỉ chủ quỹ mới được tất toán quỹ");
+        }
+
+        BigDecimal currentAmount = fund.getCurrentAmount();
+        if (currentAmount == null || currentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            // Không có tiền để tất toán, chỉ đóng quỹ
+            fund.setStatus(FundStatus.CLOSED);
+            fund = fundRepository.save(fund);
+            return buildFundResponse(fund);
+        }
+
+        // Lấy ví quỹ và ví nguồn với lock
+        Wallet targetWallet = walletRepository.findByIdWithLock(fund.getTargetWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví quỹ không tồn tại"));
+
+        Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+
+        // Kiểm tra quyền trên ví nguồn
+        if (!walletService.hasAccess(sourceWallet.getWalletId(), userId)) {
+            throw new RuntimeException("Bạn không có quyền truy cập ví nguồn của quỹ");
+        }
+
+        // Điều chỉnh số tiền nếu số dư ví quỹ không đủ
+        BigDecimal actualAmount = currentAmount;
+        if (targetWallet.getBalance().compareTo(currentAmount) < 0) {
+            actualAmount = targetWallet.getBalance();
+        }
+
+        // Chuyển toàn bộ tiền từ ví quỹ về ví nguồn
+        targetWallet.setBalance(targetWallet.getBalance().subtract(actualAmount));
+        sourceWallet.setBalance(sourceWallet.getBalance().add(actualAmount));
+
+        walletRepository.save(targetWallet);
+        walletRepository.save(sourceWallet);
+
+        // Cập nhật quỹ: số dư = 0, trạng thái = CLOSED
+        fund.setCurrentAmount(BigDecimal.ZERO);
+        fund.setStatus(FundStatus.CLOSED);
+        fund = fundRepository.save(fund);
+
+        // Ghi vào lịch sử
+        User performer = userRepository.findById(userId)
+                .orElse(fund.getOwner());
+        FundTransaction tx = new FundTransaction();
+        tx.setFund(fund);
+        tx.setAmount(actualAmount);
+        tx.setType(FundTransactionType.WITHDRAW);
+        tx.setStatus(FundTransactionStatus.SUCCESS);
+        tx.setMessage("Tất toán quỹ");
         tx.setPerformedBy(performer);
         fundTransactionRepository.save(tx);
 

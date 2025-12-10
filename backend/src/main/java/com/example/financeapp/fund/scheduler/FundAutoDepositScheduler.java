@@ -75,7 +75,12 @@ public class FundAutoDepositScheduler {
 
         // 2. Tìm quỹ tự động nạp WEEKLY
         int dayOfWeek = today.getDayOfWeek().getValue(); // 1=Monday, 7=Sunday
-        List<Fund> weeklyDeposits = fundRepository.findWeeklyAutoDeposits(dayOfWeek, startTime, currentTime, currentDateTime);
+        // Tính toán start và end của tuần (thứ 2 đầu tuần đến chủ nhật cuối tuần)
+        java.time.DayOfWeek firstDayOfWeek = today.getDayOfWeek();
+        int daysFromMonday = (firstDayOfWeek.getValue() + 6) % 7; // 0=Monday, 6=Sunday
+        LocalDateTime startOfWeek = currentDateTime.minusDays(daysFromMonday).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime endOfWeek = startOfWeek.plusDays(6).withHour(23).withMinute(59).withSecond(59);
+        List<Fund> weeklyDeposits = fundRepository.findWeeklyAutoDeposits(dayOfWeek, startTime, currentTime, currentDateTime, startOfWeek, endOfWeek);
         fundsToDeposit.addAll(weeklyDeposits);
         log.debug("Tìm thấy {} quỹ cần tự động nạp WEEKLY (thứ {})", weeklyDeposits.size(), dayOfWeek);
 
