@@ -30,6 +30,13 @@ public class Wallet {
     @Column(name = "balance", precision = 20, scale = 8)
     private BigDecimal balance = BigDecimal.ZERO;
 
+    // Lưu số dư gốc để đảm bảo tính đối xứng khi chuyển đổi tiền tệ (A->B->A = A)
+    @Column(name = "original_balance", precision = 20, scale = 8)
+    private BigDecimal originalBalance;
+
+    @Column(name = "original_currency", length = 3)
+    private String originalCurrency;
+
     @Column(name = "description", length = 255)
     private String description;
 
@@ -132,5 +139,21 @@ public class Wallet {
 
     public void setWalletType(String walletType) {
         this.walletType = walletType;
+    }
+
+    public BigDecimal getOriginalBalance() {
+        return originalBalance;
+    }
+
+    public void setOriginalBalance(BigDecimal originalBalance) {
+        this.originalBalance = originalBalance;
+    }
+
+    public String getOriginalCurrency() {
+        return originalCurrency;
+    }
+
+    public void setOriginalCurrency(String originalCurrency) {
+        this.originalCurrency = originalCurrency;
     }
 }

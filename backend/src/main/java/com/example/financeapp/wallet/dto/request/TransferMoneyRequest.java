@@ -18,7 +18,7 @@ public class TransferMoneyRequest {
     private Long toWalletId;
 
     @NotNull(message = "Số tiền không được để trống")
-    @DecimalMin(value = "0.01", message = "Số tiền phải lớn hơn 0")
+    @DecimalMin(value = "0.00000001", message = "Số tiền phải lớn hơn 0")
     private BigDecimal amount;
 
     @Size(max = 3, message = "Mã tiền tệ không hợp lệ")

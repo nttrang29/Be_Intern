@@ -36,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -78,7 +79,12 @@ public class WalletServiceImpl implements WalletService {
         wallet.setUser(user);
         wallet.setWalletName(request.getWalletName().trim());
         wallet.setCurrencyCode(request.getCurrencyCode().toUpperCase());
-        wallet.setBalance(BigDecimal.valueOf(request.getInitialBalance()));
+        BigDecimal initialBalance = BigDecimal.valueOf(request.getInitialBalance());
+        wallet.setBalance(initialBalance);
+        // KHÔNG lưu originalBalance khi tạo ví mới
+        // Chỉ lưu khi chuyển đổi currency lần đầu để tránh lưu balance = 0
+        wallet.setOriginalBalance(null);
+        wallet.setOriginalCurrency(null);
         wallet.setDescription(request.getDescription());
         wallet.setDefault(false);
 
@@ -321,13 +327,77 @@ public class WalletServiceImpl implements WalletService {
 
             // Nếu currency thay đổi, chuyển đổi số dư và transactions
             if (!oldCurrency.equals(newCurrency)) {
-                // Chuyển đổi số dư
-                BigDecimal convertedBalance = exchangeRateService.convertAmount(
-                        wallet.getBalance(),
-                        oldCurrency,
-                        newCurrency
-                );
-                wallet.setBalance(convertedBalance);
+                BigDecimal convertedBalance;
+
+                // Lưu currency gốc và số dư gốc để tracking (chỉ lưu lần đầu tiên chuyển đổi currency)
+                if (wallet.getOriginalCurrency() == null) {
+                    wallet.setOriginalCurrency(oldCurrency);
+                    wallet.setOriginalBalance(wallet.getBalance());
+                }
+
+                // Nếu đang chuyển về currency gốc
+                if (newCurrency.equals(wallet.getOriginalCurrency())) {
+                    // Tính toán số dư dựa trên số dư hiện tại và tỷ giá ngược
+                    BigDecimal reverseRate = exchangeRateService.getExchangeRate(oldCurrency, newCurrency);
+                    BigDecimal calculatedFromCurrent = wallet.getBalance().multiply(reverseRate);
+
+                    // Tính toán số dư dựa trên originalBalance và tỷ giá (nếu không có giao dịch)
+                    BigDecimal calculatedFromOriginal = null;
+                    if (wallet.getOriginalBalance() != null) {
+                        // Tính xem originalBalance đã được chuyển đổi sang oldCurrency như thế nào
+                        // Nếu originalCurrency == newCurrency (currency gốc), thì dùng trực tiếp
+                        if (wallet.getOriginalCurrency().equals(newCurrency)) {
+                            calculatedFromOriginal = wallet.getOriginalBalance();
+                        }
+                    }
+
+                    // Xác định số chữ số thập phân thực tế của originalBalance
+                    int originalScale = 8; // Mặc định 8 chữ số
+                    if (wallet.getOriginalBalance() != null) {
+                        // Lấy số chữ số thập phân thực tế (loại bỏ số 0 ở cuối)
+                        String originalStr = wallet.getOriginalBalance().stripTrailingZeros().toPlainString();
+                        int dotIndex = originalStr.indexOf('.');
+                        if (dotIndex >= 0) {
+                            originalScale = originalStr.length() - dotIndex - 1;
+                        } else {
+                            originalScale = 0; // Số nguyên
+                        }
+                        // Giới hạn tối đa 8 chữ số (theo scale của database)
+                        originalScale = Math.min(originalScale, 8);
+                    }
+
+                    // Nếu số dư tính từ current balance gần với originalBalance (sai số < 0.01),
+                    // có nghĩa là không có giao dịch, dùng originalBalance để tránh sai số tích lũy
+                    if (calculatedFromOriginal != null) {
+                        // Làm tròn calculatedFromCurrent về số chữ số thập phân của originalBalance
+                        calculatedFromCurrent = calculatedFromCurrent.setScale(originalScale, RoundingMode.HALF_UP);
+                        BigDecimal difference = calculatedFromCurrent.subtract(calculatedFromOriginal).abs();
+                        if (difference.compareTo(new BigDecimal("0.01")) < 0) {
+                            // Không có giao dịch, dùng originalBalance để đảm bảo tính đối xứng
+                            convertedBalance = calculatedFromOriginal;
+                        } else {
+                            // Có giao dịch, dùng số dư tính từ current balance (đã làm tròn về originalScale)
+                            convertedBalance = calculatedFromCurrent;
+                            // Cập nhật originalBalance để lần sau có thể dùng
+                            wallet.setOriginalBalance(convertedBalance);
+                        }
+                    } else {
+                        // Không có originalBalance, dùng số dư tính từ current balance
+                        // Làm tròn về số chữ số thập phân hợp lý (3 chữ số cho VND, 8 chữ số cho USD)
+                        int targetScale = newCurrency.equals("VND") ? 3 : 8;
+                        convertedBalance = calculatedFromCurrent.setScale(targetScale, RoundingMode.HALF_UP);
+                        wallet.setOriginalBalance(convertedBalance);
+                    }
+                    wallet.setBalance(convertedBalance);
+                } else {
+                    // Chuyển đổi từ currency hiện tại sang currency mới
+                    convertedBalance = exchangeRateService.convertAmount(
+                            wallet.getBalance(),
+                            oldCurrency,
+                            newCurrency
+                    );
+                    wallet.setBalance(convertedBalance);
+                }
 
                 // Chuyển đổi tất cả transactions (nếu có)
                 List<Transaction> transactions = transactionRepository.findByWallet_WalletId(walletId);
@@ -714,7 +784,7 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     @Transactional
-    public MergeWalletResponse mergeWallets(Long userId, Long sourceWalletId, Long targetWalletId, String targetCurrency) {
+    public MergeWalletResponse mergeWallets(Long userId, Long sourceWalletId, Long targetWalletId, String targetCurrency, Boolean setTargetAsDefault) {
         long startTime = System.currentTimeMillis();
 
         // Kiểm tra quyền sở hữu
@@ -777,10 +847,23 @@ public class WalletServiceImpl implements WalletService {
         targetWallet.setCurrencyCode(targetCurrency);
         targetWallet.setBalance(sourceBalanceConverted.add(targetBalanceConverted));
 
-        // Nếu source wallet là default, chuyển sang target wallet
-        if (wasSourceDefault) {
-            walletRepository.unsetDefaultWallet(userId, targetWalletId);
-            targetWallet.setDefault(true);
+        // Xử lý ví mặc định
+        if (setTargetAsDefault != null) {
+            // Nếu có chỉ định rõ ràng
+            if (Boolean.TRUE.equals(setTargetAsDefault)) {
+                // Đặt ví đích làm ví mặc định
+                walletRepository.unsetDefaultWallet(userId, targetWalletId);
+                targetWallet.setDefault(true);
+            } else {
+                // Bỏ ví mặc định (không đặt ví đích làm ví mặc định)
+                targetWallet.setDefault(false);
+            }
+        } else {
+            // Nếu không có chỉ định, tự động chuyển từ source nếu source là default
+            if (wasSourceDefault) {
+                walletRepository.unsetDefaultWallet(userId, targetWalletId);
+                targetWallet.setDefault(true);
+            }
         }
 
         walletRepository.save(targetWallet);

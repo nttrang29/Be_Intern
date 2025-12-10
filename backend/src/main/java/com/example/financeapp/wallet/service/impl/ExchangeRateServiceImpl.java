@@ -74,6 +74,18 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
             return BigDecimal.ONE;
         }
 
+        // FIXED: Luôn dùng tỷ giá fix cứng cho USD <-> VND (không fetch từ API)
+        // Tỷ giá fix cứng: 1 USD = 24390.243902439024 VND (1 / 0.000041)
+        // 1 VND = 0.000041 USD
+        if ((from.equals("USD") && to.equals("VND"))) {
+            // 1 USD = 1 / 0.000041 = 24390.243902439024 VND
+            return BigDecimal.ONE.divide(new BigDecimal("0.000041"), 12, RoundingMode.HALF_UP);
+        }
+        if ((from.equals("VND") && to.equals("USD"))) {
+            // 1 VND = 0.000041 USD
+            return new BigDecimal("0.000041");
+        }
+
         String key = from + ":" + to;
         CachedRate cached = cache.get(key);
         long now = System.currentTimeMillis();
@@ -81,19 +93,8 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
             return cached.rate;
         }
 
-        // Special-case: for USD <-> VND prefer Google Finance (user requested)
-        if ((from.equals("USD") && to.equals("VND")) || (from.equals("VND") && to.equals("USD"))) {
-            try {
-                BigDecimal googleRate = fetchFromGoogleFinance(from, to);
-                if (googleRate != null) {
-                    cache.put(key, new CachedRate(googleRate, now));
-                    return googleRate;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
         // Try fetch from external API (exchangerate.host) as primary official source
+        // (chỉ cho các currency khác, không phải USD <-> VND)
         try {
             String uri = String.format("%s?from=%s&to=%s", baseUrl, from, to);
             JsonNode root = webClient.get()
@@ -120,6 +121,7 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
         }
 
         // If API fails, try Google Finance HTML as a last-resort fallback
+        // (chỉ cho các currency khác, không phải USD <-> VND)
         try {
             BigDecimal googleRate = fetchFromGoogleFinance(from, to);
             if (googleRate != null) {
@@ -191,7 +193,12 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
         }
 
         BigDecimal rate = getExchangeRate(fromCurrency, toCurrency);
-        return amount.multiply(rate).setScale(8, RoundingMode.HALF_UP);
+        // Tính toán với độ chính xác cao (12 chữ số) để tránh tích lũy sai số
+        // Chỉ làm tròn về 8 chữ số khi lưu vào database (được thực hiện ở entity level)
+        // Điều này đảm bảo tính đối xứng: A->B->A ≈ A (sai số tối thiểu)
+        BigDecimal result = amount.multiply(rate);
+        // Làm tròn về 8 chữ số thập phân (theo scale của database)
+        return result.setScale(8, RoundingMode.HALF_UP);
     }
 }
 

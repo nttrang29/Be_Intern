@@ -107,15 +107,15 @@ public class WalletController {
         Map<String, Object> res = new HashMap<>();
         try {
             Long userId = getCurrentUserId();
-                Wallet wallet = walletService.getWalletDetails(userId, walletId);
+            Wallet wallet = walletService.getWalletDetails(userId, walletId);
 
-                // Determine current user's role in this wallet
-                String role = walletMemberRepository.findByWallet_WalletIdAndUser_UserId(walletId, userId)
+            // Determine current user's role in this wallet
+            String role = walletMemberRepository.findByWallet_WalletIdAndUser_UserId(walletId, userId)
                     .map(m -> m.getRole().toString())
                     .orElse("NONE");
 
-                res.put("wallet", wallet);
-                res.put("role", role);
+            res.put("wallet", wallet);
+            res.put("role", role);
             return ResponseEntity.ok(res);
 
         } catch (RuntimeException e) {
@@ -408,7 +408,8 @@ public class WalletController {
                     userId,
                     request.getSourceWalletId(),
                     targetWalletId,
-                    request.getTargetCurrency()
+                    request.getTargetCurrency(),
+                    request.getSetTargetAsDefault()
             );
 
             res.put("success", true);
