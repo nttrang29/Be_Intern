@@ -10,8 +10,8 @@ public class CreateWalletRequest {
     private String walletName;
 
     @NotBlank(message = "Loại tiền không được để trống")
-    @Pattern(regexp = "^[A-Z]{3}$", message = "Mã tiền tệ phải đúng định dạng ISO (VD: VND, USD)")
-    private String currencyCode;
+    @Pattern(regexp = "^VND$", message = "Hệ thống chỉ hỗ trợ VND")
+    private String currencyCode = "VND";
 
     /**
      * @deprecated Số dư ban đầu luôn là 0. Field này bị ignore trong backend.

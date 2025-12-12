@@ -38,13 +38,8 @@ public class DataSeeder implements CommandLineRunner {
             vnd.setCurrencyName("Vietnamese Dong");
             vnd.setSymbol("₫");
 
-            Currency usd = new Currency();
-            usd.setCurrencyCode("USD");
-            usd.setCurrencyName("US Dollar");
-            usd.setSymbol("$");
-
-            currencyRepository.saveAll(List.of(vnd, usd));
-            System.out.println(">>> [DataSeeder] Đã thêm thành công 2 loại tiền tệ (VND, USD).");
+            currencyRepository.save(vnd);
+            System.out.println(">>> [DataSeeder] Đã thêm thành công loại tiền tệ VND.");
         } else {
             System.out.println(">>> [DataSeeder] Bảng 'currencies' đã có dữ liệu. Bỏ qua seeding.");
         }

@@ -67,8 +67,13 @@ public class WalletServiceImpl implements WalletService {
 
 
 
-        if (!currencyRepository.existsById(request.getCurrencyCode())) {
-            throw new RuntimeException("Loại tiền tệ không hợp lệ: " + request.getCurrencyCode());
+        // Hệ thống chỉ hỗ trợ VND
+        String currencyCode = request.getCurrencyCode() != null ? request.getCurrencyCode().toUpperCase() : "VND";
+        if (!currencyCode.equals("VND")) {
+            throw new RuntimeException("Hệ thống chỉ hỗ trợ VND. Không thể tạo ví với loại tiền tệ: " + currencyCode);
+        }
+        if (!currencyRepository.existsById(currencyCode)) {
+            throw new RuntimeException("Loại tiền tệ không hợp lệ: " + currencyCode);
         }
 
         if (walletRepository.existsByWalletNameAndUser_UserId(request.getWalletName(), userId)) {
@@ -78,7 +83,7 @@ public class WalletServiceImpl implements WalletService {
         Wallet wallet = new Wallet();
         wallet.setUser(user);
         wallet.setWalletName(request.getWalletName().trim());
-        wallet.setCurrencyCode(request.getCurrencyCode().toUpperCase());
+        wallet.setCurrencyCode(currencyCode);
         BigDecimal initialBalance = BigDecimal.valueOf(request.getInitialBalance());
         wallet.setBalance(initialBalance);
         // KHÔNG lưu originalBalance khi tạo ví mới
@@ -318,12 +323,18 @@ public class WalletServiceImpl implements WalletService {
 
         // Cập nhật tiền tệ và chuyển đổi số dư nếu currency thay đổi
         if (request.getCurrencyCode() != null) {
-            if (!currencyRepository.existsById(request.getCurrencyCode())) {
+            String newCurrency = request.getCurrencyCode().toUpperCase();
+            
+            // Hệ thống chỉ hỗ trợ VND
+            if (!newCurrency.equals("VND")) {
+                throw new RuntimeException("Hệ thống chỉ hỗ trợ VND. Không thể đổi sang loại tiền tệ: " + newCurrency);
+            }
+            
+            if (!currencyRepository.existsById(newCurrency)) {
                 throw new RuntimeException("Mã tiền tệ không tồn tại");
             }
 
             String oldCurrency = wallet.getCurrencyCode();
-            String newCurrency = request.getCurrencyCode();
 
             // Nếu currency thay đổi, chuyển đổi số dư và transactions
             if (!oldCurrency.equals(newCurrency)) {
