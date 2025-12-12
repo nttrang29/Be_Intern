@@ -13,11 +13,22 @@ import java.util.Optional; // <-- Cần thiết cho việc tìm kiếm chi tiế
 
 public interface WalletRepository extends JpaRepository<Wallet, Long> {
 
+    // Query methods với filter deleted = false
+    List<Wallet> findByUser_UserIdAndDeletedFalse(Long userId);
+    boolean existsByWalletNameAndUser_UserIdAndDeletedFalse(String walletName, Long userId);
+
+    Wallet findByWalletNameAndUser_UserIdAndDeletedFalse(String walletName, Long userId);
+
+    Optional<Wallet> findByWalletIdAndUser_UserIdAndDeletedFalse(Long walletId, Long userId);
+
+    // Legacy methods (giữ lại để tương thích, nhưng nên dùng methods có filter deleted)
+    @Deprecated
     List<Wallet> findByUser_UserId(Long userId);
+    @Deprecated
     boolean existsByWalletNameAndUser_UserId(String walletName, Long userId);
-
+    @Deprecated
     Wallet findByWalletNameAndUser_UserId(String walletName, Long userId);
-
+    @Deprecated
     Optional<Wallet> findByWalletIdAndUser_UserId(Long walletId, Long userId);
 
     @Modifying

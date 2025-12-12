@@ -54,6 +54,10 @@ public class Wallet {
     @Column(name = "wallet_type", length = 20)
     private String walletType = "PERSONAL"; // PERSONAL hoặc GROUP
 
+    // ===== Soft delete =====
+    @Column(name = "deleted", nullable = false)
+    private boolean deleted = false;
+
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
@@ -155,5 +159,13 @@ public class Wallet {
 
     public void setOriginalCurrency(String originalCurrency) {
         this.originalCurrency = originalCurrency;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 }

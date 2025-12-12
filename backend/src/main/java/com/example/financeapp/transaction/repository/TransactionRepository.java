@@ -22,9 +22,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     /**
      * Lấy tất cả transactions của một wallet
      */
-        List<Transaction> findByWallet_WalletId(Long walletId);
+    List<Transaction> findByWallet_WalletId(Long walletId);
 
-        @Query("""
+    @Query("""
                 SELECT DISTINCT t
                 FROM Transaction t
                 LEFT JOIN FETCH t.user
@@ -34,7 +34,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                 WHERE t.wallet.walletId = :walletId
                 ORDER BY t.transactionDate DESC
                 """)
-        List<Transaction> findDetailedByWalletId(@Param("walletId") Long walletId);
+    List<Transaction> findDetailedByWalletId(@Param("walletId") Long walletId);
 
     /**
      * Đếm số lượng transactions trong wallet

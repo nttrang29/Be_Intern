@@ -154,6 +154,7 @@ public class WalletTransferHistoryDTO {
         private Long walletId;
         private String walletName;
         private String currencyCode;
+        private Boolean deleted;
 
         public Long getWalletId() {
             return walletId;
@@ -177,6 +178,14 @@ public class WalletTransferHistoryDTO {
 
         public void setCurrencyCode(String currencyCode) {
             this.currencyCode = currencyCode;
+        }
+
+        public Boolean getDeleted() {
+            return deleted;
+        }
+
+        public void setDeleted(Boolean deleted) {
+            this.deleted = deleted;
         }
     }
 
