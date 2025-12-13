@@ -17,6 +17,7 @@ public class SharedWalletDTO {
     private String myRole; // Role của user hiện tại trong wallet này
     private Long ownerId;
     private String ownerName;
+    private String ownerEmail;
     private int totalMembers;
     private int transactionCount; // Số lượng giao dịch trong ví
     @JsonProperty("isDefault")
@@ -104,6 +105,14 @@ public class SharedWalletDTO {
 
     public void setOwnerName(String ownerName) {
         this.ownerName = ownerName;
+    }
+
+    public String getOwnerEmail() {
+        return ownerEmail;
+    }
+
+    public void setOwnerEmail(String ownerEmail) {
+        this.ownerEmail = ownerEmail;
     }
 
     public int getTotalMembers() {

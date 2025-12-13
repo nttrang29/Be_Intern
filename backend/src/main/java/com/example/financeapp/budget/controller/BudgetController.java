@@ -39,8 +39,13 @@ public class BudgetController {
             User user = userDetails.getUser();
             Budget budget = budgetService.createBudget(user.getUserId(), request);
 
+            // Chuyển đổi sang BudgetResponse để đảm bảo có đầy đủ thông tin wallet
+            // Khi mới tạo, spentAmount = 0
+            java.math.BigDecimal spentAmount = java.math.BigDecimal.ZERO;
+            BudgetResponse budgetResponse = BudgetResponse.fromBudget(budget, spentAmount);
+
             res.put("message", "Tạo hạn mức chi tiêu thành công");
-            res.put("budget", budget);
+            res.put("budget", budgetResponse);
             return ResponseEntity.ok(res);
 
         } catch (RuntimeException e) {

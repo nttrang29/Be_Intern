@@ -183,6 +183,7 @@ public class WalletServiceImpl implements WalletService {
             if (owner != null) {
                 dto.setOwnerId(owner.getUser().getUserId());
                 dto.setOwnerName(owner.getUser().getFullName());
+                dto.setOwnerEmail(owner.getUser().getEmail());
             }
 
             result.add(dto);
