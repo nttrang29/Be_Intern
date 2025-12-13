@@ -241,14 +241,14 @@ public class WalletServiceImpl implements WalletService {
         // Tạo thông báo cho người được mời - luôn là "Bạn có thể xem ví này"
         try {
             User owner = userRepository.findById(ownerId).orElse(null);
-            String ownerName = owner != null ? owner.getFullName() : "Chủ ví";
+            String ownerEmail = owner != null && owner.getEmail() != null ? owner.getEmail() : "chủ ví";
             String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
 
             notificationService.createUserNotification(
                     memberUser.getUserId(),
                     Notification.NotificationType.WALLET_INVITED,
                     "Bạn đã được mời vào ví",
-                    String.format("%s đã mời bạn tham gia ví \"%s\". Bạn có thể xem ví này.", ownerName, walletName),
+                    String.format("%s đã mời bạn tham gia ví \"%s\". Bạn có thể xem ví này.", ownerEmail, walletName),
                     walletId,
                     "WALLET"
             );
@@ -304,12 +304,10 @@ public class WalletServiceImpl implements WalletService {
                 .findFirst()
                 .orElse(null);
 
-        String ownerName = "chủ ví";
+        String ownerEmail = "chủ ví";
         if (ownerMember != null && ownerMember.getUser() != null) {
             User owner = ownerMember.getUser();
-            ownerName = owner.getFullName() != null && !owner.getFullName().trim().isEmpty()
-                    ? owner.getFullName()
-                    : (owner.getEmail() != null ? owner.getEmail() : "chủ ví");
+            ownerEmail = owner.getEmail() != null ? owner.getEmail() : "chủ ví";
         }
 
         // XÓA MỀM: Đánh dấu deleted = true thay vì xóa cứng
@@ -325,7 +323,7 @@ public class WalletServiceImpl implements WalletService {
                         removedUser.getUserId(),
                         Notification.NotificationType.WALLET_MEMBER_REMOVED,
                         "Bạn đã bị xóa khỏi ví",
-                        String.format("Bạn đã bị xóa khỏi ví \"%s\" bởi chủ ví %s.", walletName, ownerName),
+                        String.format("Bạn đã bị xóa khỏi ví \"%s\" bởi chủ ví %s.", walletName, ownerEmail),
                         walletId,
                         "WALLET"
                 );
@@ -389,7 +387,7 @@ public class WalletServiceImpl implements WalletService {
                 Wallet wallet = target.getWallet();
                 String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
                 User owner = wallet.getUser();
-                String ownerName = owner != null ? owner.getFullName() : "Chủ ví";
+                String ownerEmail = owner != null && owner.getEmail() != null ? owner.getEmail() : "chủ ví";
 
                 if (oldRole == WalletRole.VIEW && newRole == WalletRole.MEMBER) {
                     // Nâng quyền từ VIEW lên MEMBER
@@ -397,7 +395,7 @@ public class WalletServiceImpl implements WalletService {
                             target.getUser().getUserId(),
                             Notification.NotificationType.WALLET_ROLE_UPDATED,
                             "Quyền truy cập ví đã được nâng cấp",
-                            String.format("%s đã nâng quyền của bạn trong ví \"%s\" lên thành viên. Bạn có thể xem và quản lý ví này.", ownerName, walletName),
+                            String.format("%s đã nâng quyền của bạn trong ví \"%s\" lên thành viên. Bạn có thể xem và quản lý ví này.", ownerEmail, walletName),
                             walletId,
                             "WALLET"
                     );
@@ -407,7 +405,7 @@ public class WalletServiceImpl implements WalletService {
                             target.getUser().getUserId(),
                             Notification.NotificationType.WALLET_ROLE_UPDATED,
                             "Quyền truy cập ví đã được thay đổi",
-                            String.format("%s đã thay đổi quyền của bạn trong ví \"%s\" xuống người xem. Bạn chỉ có thể xem ví này.", ownerName, walletName),
+                            String.format("%s đã thay đổi quyền của bạn trong ví \"%s\" xuống người xem. Bạn chỉ có thể xem ví này.", ownerEmail, walletName),
                             walletId,
                             "WALLET"
                     );
@@ -778,7 +776,7 @@ public class WalletServiceImpl implements WalletService {
         // Lấy thông tin trước khi xóa để tạo notification
         Wallet wallet = member.getWallet();
         User leavingUser = member.getUser();
-        String leavingUserName = leavingUser.getFullName() != null ? leavingUser.getFullName() : leavingUser.getEmail();
+        String leavingUserEmail = leavingUser.getEmail() != null ? leavingUser.getEmail() : "thành viên";
         String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
 
         // Tìm owner của ví để gửi thông báo
@@ -800,7 +798,7 @@ public class WalletServiceImpl implements WalletService {
                         ownerMember.getUser().getUserId(),
                         Notification.NotificationType.WALLET_MEMBER_LEFT,
                         "Thành viên đã rời khỏi ví",
-                        String.format("%s đã rời khỏi ví \"%s\".", leavingUserName, walletName),
+                        String.format("%s đã rời khỏi ví \"%s\".", leavingUserEmail, walletName),
                         walletId,
                         "WALLET"
                 );
@@ -1303,12 +1301,10 @@ public class WalletServiceImpl implements WalletService {
         List<WalletMember> members = walletMemberRepository.findByWallet_WalletId(walletId);
         int membersRemoved = members.size();
 
-        // Lấy thông tin chủ ví để hiển thị trong thông báo
+        // Lấy thông tin chủ ví để hiển thị trong thông báo (sử dụng email)
         User owner = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chủ ví"));
-        String ownerName = owner.getFullName() != null && !owner.getFullName().trim().isEmpty()
-                ? owner.getFullName()
-                : (owner.getEmail() != null ? owner.getEmail() : "chủ ví");
+        String ownerEmail = owner.getEmail() != null ? owner.getEmail() : "chủ ví";
         String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
 
         // 6. XÓA MỀM: Chỉ đánh dấu deleted = true, không xóa khỏi database
@@ -1332,7 +1328,7 @@ public class WalletServiceImpl implements WalletService {
                         member.getUser().getUserId(),
                         Notification.NotificationType.WALLET_DELETED,
                         "Ví đã bị xóa",
-                        String.format("Ví \"%s\" đã bị xóa bởi chủ ví %s.", walletName, ownerName),
+                        String.format("Ví \"%s\" đã bị xóa bởi chủ ví %s.", walletName, ownerEmail),
                         walletId,
                         "WALLET"
                 );
