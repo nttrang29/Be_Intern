@@ -22,16 +22,11 @@ import java.util.regex.Pattern;
 @Service
 public class ExchangeRateServiceImpl implements ExchangeRateService {
 
-    // Fallback rates (kept for resilience)
+    // Frontend chỉ dùng VND, không còn hỗ trợ chuyển đổi tiền tệ
     private static final Map<String, BigDecimal> FALLBACK_RATES = new HashMap<>();
 
     static {
         FALLBACK_RATES.put("VND", BigDecimal.ONE);
-        FALLBACK_RATES.put("USD", new BigDecimal("0.000041"));
-        FALLBACK_RATES.put("EUR", new BigDecimal("0.000038"));
-        FALLBACK_RATES.put("JPY", new BigDecimal("0.0063"));
-        FALLBACK_RATES.put("GBP", new BigDecimal("0.000032"));
-        FALLBACK_RATES.put("CNY", new BigDecimal("0.00030"));
     }
 
     private final WebClient webClient;
@@ -74,16 +69,10 @@ public class ExchangeRateServiceImpl implements ExchangeRateService {
             return BigDecimal.ONE;
         }
 
-        // FIXED: Luôn dùng tỷ giá fix cứng cho USD <-> VND (không fetch từ API)
-        // Tỷ giá fix cứng: 1 USD = 24390.243902439024 VND (1 / 0.000041)
-        // 1 VND = 0.000041 USD
-        if ((from.equals("USD") && to.equals("VND"))) {
-            // 1 USD = 1 / 0.000041 = 24390.243902439024 VND
-            return BigDecimal.ONE.divide(new BigDecimal("0.000041"), 12, RoundingMode.HALF_UP);
-        }
-        if ((from.equals("VND") && to.equals("USD"))) {
-            // 1 VND = 0.000041 USD
-            return new BigDecimal("0.000041");
+        // Frontend chỉ dùng VND, không còn hỗ trợ chuyển đổi tiền tệ
+        // Nếu khác VND, trả về lỗi
+        if (!from.equals("VND") || !to.equals("VND")) {
+            throw new RuntimeException("Hệ thống chỉ hỗ trợ VND. Không thể chuyển đổi từ " + from + " sang " + to);
         }
 
         String key = from + ":" + to;
