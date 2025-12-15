@@ -465,12 +465,12 @@ public class WalletServiceImpl implements WalletService {
         // Cập nhật tiền tệ và chuyển đổi số dư nếu currency thay đổi
         if (request.getCurrencyCode() != null) {
             String newCurrency = request.getCurrencyCode().toUpperCase();
-            
+
             // Hệ thống chỉ hỗ trợ VND
             if (!newCurrency.equals("VND")) {
                 throw new RuntimeException("Hệ thống chỉ hỗ trợ VND. Không thể đổi sang loại tiền tệ: " + newCurrency);
             }
-            
+
             if (!currencyRepository.existsById(newCurrency)) {
                 throw new RuntimeException("Mã tiền tệ không tồn tại");
             }
@@ -1262,6 +1262,61 @@ public class WalletServiceImpl implements WalletService {
         history.setMergeDurationMs(System.currentTimeMillis() - startTime);
 
         WalletMergeHistory savedHistory = walletMergeHistoryRepository.save(history);
+
+        // Gửi thông báo cho tất cả thành viên của cả 2 ví (trước khi gộp)
+        try {
+            // Lấy danh sách member (bao gồm cả owner) của source và target trước khi gộp
+            List<WalletMember> allSourceMembers = sourceMembers;
+            List<WalletMember> allTargetMembers = walletMemberRepository.findByWallet_WalletId(targetWalletId);
+
+            // Gộp và loại bỏ trùng lặp theo userId
+            List<Long> notifiedUserIds = new ArrayList<>();
+
+            for (WalletMember member : allSourceMembers) {
+                Long memberUserId = member.getUser().getUserId();
+                if (!notifiedUserIds.contains(memberUserId)) {
+                    notifiedUserIds.add(memberUserId);
+                }
+            }
+
+            for (WalletMember member : allTargetMembers) {
+                Long memberUserId = member.getUser().getUserId();
+                if (!notifiedUserIds.contains(memberUserId)) {
+                    notifiedUserIds.add(memberUserId);
+                }
+            }
+
+            // Nội dung thông báo
+            String title = "Ví đã được gộp";
+            String ownerEmail = "chủ ví";
+            try {
+                User ownerUser = userRepository.findById(userId).orElse(null);
+                if (ownerUser != null && ownerUser.getEmail() != null && !ownerUser.getEmail().isBlank()) {
+                    ownerEmail = ownerUser.getEmail();
+                }
+            } catch (Exception ignore) {}
+
+            String message = String.format(
+                    "Ví \"%s\" đã được chủ ví \"%s\" gộp vào ví \"%s\". Số dư và lịch sử giao dịch của ví cũ đã được chuyển sang ví mới.",
+                    sourceWalletName,
+                    ownerEmail,
+                    targetWallet.getWalletName()
+            );
+
+            for (Long memberUserId : notifiedUserIds) {
+                notificationService.createUserNotification(
+                        memberUserId,
+                        Notification.NotificationType.WALLET_MERGED,
+                        title,
+                        message,
+                        targetWalletId,
+                        "WALLET"
+                );
+            }
+        } catch (Exception ex) {
+            // Không để lỗi thông báo ảnh hưởng tới quá trình merge ví
+            ex.printStackTrace();
+        }
 
         // Tạo response
         MergeWalletResponse response = new MergeWalletResponse();
