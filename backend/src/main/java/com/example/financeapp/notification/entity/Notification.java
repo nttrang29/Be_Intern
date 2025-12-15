@@ -54,22 +54,23 @@ public class Notification {
 
     // Enum cho loại thông báo
     public enum NotificationType {
-        NEW_APP_REVIEW,         // Admin nhận: có đánh giá mới
-        REVIEW_REPLIED,         // User nhận: admin đã phản hồi
-        NEW_FEEDBACK,           // Admin nhận: có feedback mới
-        FEEDBACK_REPLIED,       // User nhận: admin đã phản hồi feedback
-        BUDGET_WARNING,         // User nhận: ngân sách sắp hết
-        BUDGET_EXCEEDED,        // User nhận: ngân sách vượt hạn mức
+        NEW_APP_REVIEW,             // Admin nhận: có đánh giá mới
+        REVIEW_REPLIED,             // User nhận: admin đã phản hồi
+        NEW_FEEDBACK,               // Admin nhận: có feedback mới
+        FEEDBACK_REPLIED,           // User nhận: admin đã phản hồi feedback
+        BUDGET_WARNING,             // User nhận: ngân sách sắp hết
+        BUDGET_EXCEEDED,            // User nhận: ngân sách vượt hạn mức
         FUND_AUTO_DEPOSIT_SUCCESS,  // User nhận: tự động nạp quỹ thành công
         FUND_AUTO_DEPOSIT_FAILED,   // User nhận: tự động nạp quỹ thất bại
-        FUND_COMPLETED,         // User nhận: quỹ đã đạt mục tiêu
-        WALLET_INVITED,         // User nhận: được mời vào ví (role VIEW)
-        WALLET_ROLE_UPDATED,    // User nhận: quyền trong ví đã được nâng cấp (VIEW -> MEMBER)
-        WALLET_MEMBER_LEFT,     // Owner nhận: thành viên đã rời khỏi ví
-        WALLET_MEMBER_REMOVED,  // User nhận: bị xóa khỏi ví bởi chủ ví
-        WALLET_DELETED,         // User nhận: ví đã bị xóa bởi chủ ví
-        WALLET_MERGED,          // User nhận: ví của mình đã được gộp với ví khác
-        SYSTEM_ANNOUNCEMENT     // Thông báo hệ thống
+        FUND_COMPLETED,             // User nhận: quỹ đã đạt mục tiêu
+        WALLET_INVITED,             // User nhận: được mời vào ví (role VIEW)
+        WALLET_ROLE_UPDATED,        // User nhận: quyền trong ví đã được thay đổi
+        WALLET_MEMBER_LEFT,         // Owner nhận: thành viên đã rời khỏi ví
+        WALLET_MEMBER_REMOVED,      // User nhận: bị xóa khỏi ví bởi chủ ví
+        WALLET_TRANSACTION,         // Các thành viên/owner nhận: có giao dịch mới trong ví được chia sẻ
+        WALLET_DELETED,             // User nhận: ví đã bị xóa bởi chủ ví
+        WALLET_MERGED,              // User nhận: ví của mình đã được gộp với ví khác
+        SYSTEM_ANNOUNCEMENT         // Thông báo hệ thống
     }
 
     // Getters & Setters

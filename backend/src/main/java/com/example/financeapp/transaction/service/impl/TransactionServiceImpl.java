@@ -1,9 +1,12 @@
 package com.example.financeapp.transaction.service.impl;
 
+import com.example.financeapp.budget.dto.BudgetWarningResponse;
 import com.example.financeapp.budget.service.BudgetCheckService;
 import com.example.financeapp.category.entity.Category;
 import com.example.financeapp.category.repository.CategoryRepository;
 import com.example.financeapp.fund.service.FundService;
+import com.example.financeapp.notification.entity.Notification;
+import com.example.financeapp.notification.service.NotificationService;
 import com.example.financeapp.transaction.dto.CreateTransactionRequest;
 import com.example.financeapp.transaction.dto.UpdateTransactionRequest;
 import com.example.financeapp.transaction.entity.Transaction;
@@ -14,6 +17,7 @@ import com.example.financeapp.transaction.service.TransactionService;
 import com.example.financeapp.user.entity.User;
 import com.example.financeapp.user.repository.UserRepository;
 import com.example.financeapp.wallet.entity.Wallet;
+import com.example.financeapp.wallet.entity.WalletMember;
 import com.example.financeapp.wallet.repository.WalletMemberRepository;
 import com.example.financeapp.wallet.repository.WalletRepository;
 import org.slf4j.Logger;
@@ -38,6 +42,7 @@ public class TransactionServiceImpl implements TransactionService {
     @Autowired private WalletMemberRepository walletMemberRepository;
     @Autowired private BudgetCheckService budgetCheckService;
     @Autowired private FundService fundService;
+    @Autowired private NotificationService notificationService;
 
     private Transaction createTransaction(Long userId, CreateTransactionRequest req, String typeName) {
         // 1. Kiểm tra user tồn tại
@@ -119,11 +124,137 @@ public class TransactionServiceImpl implements TransactionService {
         tx.setImageUrl(req.getImageUrl());
 
         // 10. Kiểm tra và đánh dấu nếu vượt hạn mức ngân sách (chỉ cho chi tiêu)
+        // - checkAndMarkExceededBudget: gắn cờ isExceededBudget + exceededBudgetId vào transaction
+        // - checkBudgetWarning: trả về cảnh báo chi tiết (gần hết / vượt)
+        BudgetWarningResponse budgetWarning = null;
         if ("Chi tiêu".equals(typeName)) {
             budgetCheckService.checkAndMarkExceededBudget(tx);
+
+            try {
+                budgetWarning = budgetCheckService.checkBudgetWarning(tx);
+            } catch (Exception e) {
+                log.warn("Không thể tính cảnh báo ngân sách cho user {}: {}", userId, e.getMessage());
+            }
         }
 
-        return transactionRepository.save(tx);
+        // 11. Lưu transaction
+        Transaction savedTx = transactionRepository.save(tx);
+
+        // 12. Nếu có cảnh báo ngân sách, tạo thông báo chuông (mỗi hạn mức chỉ 1 lần cho mỗi trạng thái)
+        if (budgetWarning != null && budgetWarning.isHasWarning()) {
+            try {
+                String warningType = budgetWarning.getWarningType();
+                Long budgetId = budgetWarning.getBudgetId();
+
+                if (budgetId != null && warningType != null) {
+                    Notification.NotificationType notifType;
+                    if ("EXCEEDED".equalsIgnoreCase(warningType)) {
+                        notifType = Notification.NotificationType.BUDGET_EXCEEDED;
+                    } else {
+                        // NEARLY_EXHAUSTED hoặc các cảnh báo khác => WARNING
+                        notifType = Notification.NotificationType.BUDGET_WARNING;
+                    }
+
+                    // Nội dung thông báo
+                    String budgetName = budgetWarning.getBudgetName() != null
+                            ? budgetWarning.getBudgetName()
+                            : "hạn mức";
+                    String amountLimit = budgetWarning.getAmountLimit() != null
+                            ? budgetWarning.getAmountLimit().stripTrailingZeros().toPlainString()
+                            : "";
+                    String currentSpent = budgetWarning.getCurrentSpent() != null
+                            ? budgetWarning.getCurrentSpent().stripTrailingZeros().toPlainString()
+                            : "";
+                    String currency = wallet.getCurrencyCode() != null ? wallet.getCurrencyCode() : "";
+
+                    String title;
+                    String message;
+                    if (notifType == Notification.NotificationType.BUDGET_EXCEEDED) {
+                        title = "Ngân sách đã vượt hạn mức";
+                        message = String.format(
+                                "Hạn mức \"%s\" đã vượt giới hạn %s %s. Tổng chi hiện tại: %s %s.",
+                                budgetName,
+                                amountLimit,
+                                currency,
+                                currentSpent,
+                                currency
+                        );
+                    } else {
+                        title = "Ngân sách sắp chạm hạn mức";
+                        message = String.format(
+                                "Hạn mức \"%s\" đã đạt gần mức giới hạn %s %s. Tổng chi hiện tại: %s %s.",
+                                budgetName,
+                                amountLimit,
+                                currency,
+                                currentSpent,
+                                currency
+                        );
+                    }
+
+                    // Lưu ý: mỗi hạn mức chỉ thông báo 1 lần cho mỗi trạng thái
+                    // Thực hiện bằng cách tạo duy nhất 1 bản ghi cho mỗi budgetId + type
+                    notificationService.createUserNotification(
+                            userId,
+                            notifType,
+                            title,
+                            message,
+                            budgetId,
+                            "BUDGET"
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Không thể tạo thông báo ngân sách cho user {}: {}", userId, e.getMessage());
+            }
+        }
+
+        // 13. Tạo thông báo cho các thành viên khác trong ví được chia sẻ (nếu có)
+        try {
+            // Lấy tất cả member (bao gồm owner) của ví này (chưa bị xóa mềm)
+            List<WalletMember> members = walletMemberRepository.findByWallet_WalletId(wallet.getWalletId());
+
+            // Nếu chỉ có 1 member (không phải ví chia sẻ) thì không gửi thông báo
+            if (members != null && members.size() > 1) {
+                String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+                String actorName = user.getFullName() != null && !user.getFullName().isBlank()
+                        ? user.getFullName()
+                        : (user.getEmail() != null ? user.getEmail() : "Người dùng");
+
+                // Format số tiền + currency để đưa vào nội dung
+                String amountStr = req.getAmount().stripTrailingZeros().toPlainString()
+                        + " " + wallet.getCurrencyCode();
+
+                boolean isExpense = "Chi tiêu".equals(typeName);
+
+                String title = isExpense
+                        ? "Chi tiêu từ ví được chia sẻ"
+                        : "Nạp tiền vào ví được chia sẻ";
+
+                String message = isExpense
+                        ? String.format("%s đã chi %s từ ví \"%s\".", actorName, amountStr, walletName)
+                        : String.format("%s đã nạp %s vào ví \"%s\".", actorName, amountStr, walletName);
+
+                for (WalletMember member : members) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    // Không gửi thông báo cho chính người thực hiện giao dịch
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            wallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+        } catch (Exception e) {
+            // Không để lỗi thông báo làm hỏng giao dịch
+            log.warn("Không thể tạo thông báo WALLET_TRANSACTION cho ví {}: {}", wallet.getWalletId(), e.getMessage());
+        }
+
+        return savedTx;
     }
 
     @Override
