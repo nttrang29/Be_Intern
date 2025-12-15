@@ -83,14 +83,21 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         // 7. Kiểm tra số dư đủ cho chi tiêu
+        // Lưu ý: Wallet đã được lock bằng PESSIMISTIC_WRITE ở bước 2,
+        // nên số dư tại đây là số dư mới nhất và đảm bảo không bị thay đổi bởi transaction khác
         if ("Chi tiêu".equals(typeName)) {
-            BigDecimal newBalance = wallet.getBalance().subtract(req.getAmount());
+            BigDecimal currentBalance = wallet.getBalance();
+            BigDecimal newBalance = currentBalance.subtract(req.getAmount());
             if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                // Thông báo lỗi rõ ràng hơn khi số dư không đủ
+                // Có thể do số dư đã thay đổi bởi giao dịch khác (nếu lock không kịp) hoặc user nhập quá số dư
                 throw new RuntimeException(
-                        "Số dư không đủ. Số dư hiện tại: " + wallet.getBalance() +
+                        "Số dư không đủ để thực hiện giao dịch này. " +
+                                "Số dư hiện tại: " + currentBalance.stripTrailingZeros().toPlainString() +
                                 " " + wallet.getCurrencyCode() +
-                                ", Số tiền chi tiêu: " + req.getAmount() +
-                                " " + wallet.getCurrencyCode()
+                                ", Số tiền cần rút: " + req.getAmount().stripTrailingZeros().toPlainString() +
+                                " " + wallet.getCurrencyCode() +
+                                ". Vui lòng tải lại trang để xem số dư mới nhất."
                 );
             }
             wallet.setBalance(newBalance);
