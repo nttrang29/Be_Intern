@@ -31,6 +31,8 @@ import com.example.financeapp.wallet.repository.WalletRepository;
 import com.example.financeapp.wallet.repository.WalletTransferRepository;
 import com.example.financeapp.wallet.service.ExchangeRateService;
 import com.example.financeapp.wallet.service.WalletService;
+import com.example.financeapp.notification.service.NotificationService;
+import com.example.financeapp.notification.entity.Notification;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +51,7 @@ public class WalletServiceImpl implements WalletService {
     @Autowired private WalletRepository walletRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private CurrencyRepository currencyRepository;
+    @Autowired private NotificationService notificationService;
     @Autowired private WalletMemberRepository walletMemberRepository;
     @Autowired private TransactionRepository transactionRepository;
     @Autowired private WalletMergeHistoryRepository walletMergeHistoryRepository;
@@ -184,6 +188,7 @@ public class WalletServiceImpl implements WalletService {
             if (owner != null) {
                 dto.setOwnerId(owner.getUser().getUserId());
                 dto.setOwnerName(owner.getUser().getFullName());
+                dto.setOwnerEmail(owner.getUser().getEmail());
             }
 
             result.add(dto);
@@ -215,12 +220,48 @@ public class WalletServiceImpl implements WalletService {
             throw new RuntimeException("Không thể chia sẻ ví với chính bạn");
         }
 
-        if (walletMemberRepository.existsByWallet_WalletIdAndUser_UserId(walletId, memberUser.getUserId())) {
-            throw new RuntimeException("Người dùng này đã là thành viên của ví");
+        // Kiểm tra xem member đã tồn tại chưa (bao gồm cả đã bị xóa mềm)
+        Optional<WalletMember> existingMemberOpt = walletMemberRepository.findByWallet_WalletIdAndUser_UserId(walletId, memberUser.getUserId());
+
+        WalletMember saved;
+        if (existingMemberOpt.isPresent()) {
+            WalletMember existingMember = existingMemberOpt.get();
+            // Nếu member đã tồn tại và chưa bị xóa mềm
+            if (!existingMember.isDeleted()) {
+                throw new RuntimeException("Người dùng này đã là thành viên của ví");
+            }
+            // Nếu member đã bị xóa mềm, restore lại
+            existingMember.setDeleted(false);
+            existingMember.setDeletedAt(null);
+            // Reset role về VIEW khi restore
+            existingMember.setRole(WalletRole.VIEW);
+            saved = walletMemberRepository.save(existingMember);
+        } else {
+            // Tạo member mới
+            // Luôn tạo với role VIEW (Viewer) khi mời lần đầu, cả ví cá nhân và ví nhóm
+            WalletRole defaultRole = WalletRole.VIEW;
+            WalletMember newMember = new WalletMember(wallet, memberUser, defaultRole);
+            saved = walletMemberRepository.save(newMember);
         }
 
-        WalletMember newMember = new WalletMember(wallet, memberUser, WalletRole.MEMBER);
-        WalletMember saved = walletMemberRepository.save(newMember);
+        // Tạo thông báo cho người được mời - luôn là "Bạn có thể xem ví này"
+        try {
+            User owner = userRepository.findById(ownerId).orElse(null);
+            String ownerEmail = owner != null && owner.getEmail() != null ? owner.getEmail() : "chủ ví";
+            String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+
+            notificationService.createUserNotification(
+                    memberUser.getUserId(),
+                    Notification.NotificationType.WALLET_INVITED,
+                    "Bạn đã được mời vào ví",
+                    String.format("%s đã mời bạn tham gia ví \"%s\". Bạn có thể xem ví này.", ownerEmail, walletName),
+                    walletId,
+                    "WALLET"
+            );
+        } catch (Exception e) {
+            // Log lỗi nhưng không throw để không ảnh hưởng đến việc chia sẻ ví
+            System.err.println("Lỗi khi tạo thông báo cho người được mời: " + e.getMessage());
+        }
 
         return convertToMemberDTO(saved);
     }
@@ -253,7 +294,50 @@ public class WalletServiceImpl implements WalletService {
                 .findByWallet_WalletIdAndUser_UserId(walletId, memberUserId)
                 .orElseThrow(() -> new RuntimeException("Thành viên không tồn tại trong ví"));
 
-        walletMemberRepository.delete(member);
+        // Kiểm tra nếu member đã bị xóa mềm
+        if (member.isDeleted()) {
+            throw new RuntimeException("Thành viên này đã bị xóa khỏi ví");
+        }
+
+        // Lấy thông tin trước khi xóa để tạo notification
+        Wallet wallet = member.getWallet();
+        User removedUser = member.getUser();
+        String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+
+        // Tìm owner của ví để lấy thông tin chủ ví
+        WalletMember ownerMember = walletMemberRepository.findByWallet_WalletIdAndRole(walletId, WalletRole.OWNER)
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        String ownerEmail = "chủ ví";
+        if (ownerMember != null && ownerMember.getUser() != null) {
+            User owner = ownerMember.getUser();
+            ownerEmail = owner.getEmail() != null ? owner.getEmail() : "chủ ví";
+        }
+
+        // XÓA MỀM: Đánh dấu deleted = true thay vì xóa cứng
+        // Điều này giúp giữ lại lịch sử giao dịch liên quan đến thành viên này
+        member.setDeleted(true);
+        member.setDeletedAt(LocalDateTime.now());
+        walletMemberRepository.save(member);
+
+        // Tạo thông báo cho thành viên bị xóa
+        if (removedUser != null) {
+            try {
+                notificationService.createUserNotification(
+                        removedUser.getUserId(),
+                        Notification.NotificationType.WALLET_MEMBER_REMOVED,
+                        "Bạn đã bị xóa khỏi ví",
+                        String.format("Bạn đã bị xóa khỏi ví \"%s\" bởi chủ ví %s.", walletName, ownerEmail),
+                        walletId,
+                        "WALLET"
+                );
+            } catch (Exception e) {
+                // Log lỗi nhưng không throw để không ảnh hưởng đến việc xóa thành viên
+                System.err.println("Lỗi khi tạo thông báo cho thành viên bị xóa: " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -300,8 +384,42 @@ public class WalletServiceImpl implements WalletService {
             walletMemberRepository.save(target);
         } else {
             // Đặt thành MEMBER hoặc VIEW
+            WalletRole oldRole = target.getRole();
             target.setRole(newRole);
             walletMemberRepository.save(target);
+
+            // Tạo thông báo khi thay đổi quyền
+            try {
+                Wallet wallet = target.getWallet();
+                String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+                User owner = wallet.getUser();
+                String ownerEmail = owner != null && owner.getEmail() != null ? owner.getEmail() : "chủ ví";
+
+                if (oldRole == WalletRole.VIEW && newRole == WalletRole.MEMBER) {
+                    // Nâng quyền từ VIEW lên MEMBER
+                    notificationService.createUserNotification(
+                            target.getUser().getUserId(),
+                            Notification.NotificationType.WALLET_ROLE_UPDATED,
+                            "Quyền truy cập ví đã được nâng cấp",
+                            String.format("%s đã nâng quyền của bạn trong ví \"%s\" lên thành viên. Bạn có thể xem và quản lý ví này.", ownerEmail, walletName),
+                            walletId,
+                            "WALLET"
+                    );
+                } else if (oldRole == WalletRole.MEMBER && newRole == WalletRole.VIEW) {
+                    // Hạ quyền từ MEMBER xuống VIEW
+                    notificationService.createUserNotification(
+                            target.getUser().getUserId(),
+                            Notification.NotificationType.WALLET_ROLE_UPDATED,
+                            "Quyền truy cập ví đã được thay đổi",
+                            String.format("%s đã thay đổi quyền của bạn trong ví \"%s\" xuống người xem. Bạn chỉ có thể xem ví này.", ownerEmail, walletName),
+                            walletId,
+                            "WALLET"
+                    );
+                }
+            } catch (Exception e) {
+                // Log lỗi nhưng không throw để không ảnh hưởng đến việc cập nhật role
+                System.err.println("Lỗi khi tạo thông báo thay đổi quyền: " + e.getMessage());
+            }
         }
     }
 
@@ -658,11 +776,49 @@ public class WalletServiceImpl implements WalletService {
                 .findByWallet_WalletIdAndUser_UserId(walletId, userId)
                 .orElseThrow(() -> new RuntimeException("Bạn không phải thành viên ví này"));
 
+        // Kiểm tra nếu member đã bị xóa mềm
+        if (member.isDeleted()) {
+            throw new RuntimeException("Bạn đã rời khỏi ví này rồi");
+        }
+
         if (member.getRole() == WalletRole.OWNER) {
             throw new RuntimeException("Chủ sở hữu không thể tự rời ví");
         }
 
-        walletMemberRepository.delete(member);
+        // Lấy thông tin trước khi xóa để tạo notification
+        Wallet wallet = member.getWallet();
+        User leavingUser = member.getUser();
+        String leavingUserEmail = leavingUser.getEmail() != null ? leavingUser.getEmail() : "thành viên";
+        String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+
+        // Tìm owner của ví để gửi thông báo
+        WalletMember ownerMember = walletMemberRepository.findByWallet_WalletIdAndRole(walletId, WalletRole.OWNER)
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        // XÓA MỀM: Đánh dấu deleted = true thay vì xóa cứng
+        // Điều này giúp giữ lại lịch sử giao dịch liên quan đến thành viên này
+        member.setDeleted(true);
+        member.setDeletedAt(LocalDateTime.now());
+        walletMemberRepository.save(member);
+
+        // Tạo thông báo cho chủ ví
+        if (ownerMember != null && ownerMember.getUser() != null) {
+            try {
+                notificationService.createUserNotification(
+                        ownerMember.getUser().getUserId(),
+                        Notification.NotificationType.WALLET_MEMBER_LEFT,
+                        "Thành viên đã rời khỏi ví",
+                        String.format("%s đã rời khỏi ví \"%s\".", leavingUserEmail, walletName),
+                        walletId,
+                        "WALLET"
+                );
+            } catch (Exception e) {
+                // Log lỗi nhưng không throw để không ảnh hưởng đến việc rời ví
+                System.err.println("Lỗi khi tạo thông báo cho chủ ví: " + e.getMessage());
+            }
+        }
     }
 
     // ---------------- ACCESS CHECK ----------------
@@ -1153,15 +1309,48 @@ public class WalletServiceImpl implements WalletService {
             throw new RuntimeException("Không thể xóa ví mặc định.");
         }
 
-        // 5. Lưu thông tin thành viên trước khi xóa (để trả về response)
+        // 5. Lưu thông tin thành viên trước khi xóa (để trả về response và gửi thông báo)
         List<WalletMember> members = walletMemberRepository.findByWallet_WalletId(walletId);
         int membersRemoved = members.size();
+
+        // Lấy thông tin chủ ví để hiển thị trong thông báo (sử dụng email)
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy chủ ví"));
+        String ownerEmail = owner.getEmail() != null ? owner.getEmail() : "chủ ví";
+        String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
 
         // 6. XÓA MỀM: Chỉ đánh dấu deleted = true, không xóa khỏi database
         wallet.setDeleted(true);
         walletRepository.save(wallet);
 
-        // 7. Trả về thông tin
+        // 7. Gửi thông báo cho tất cả thành viên (trừ chủ ví)
+        for (WalletMember member : members) {
+            // Bỏ qua chủ ví (không gửi thông báo cho chính mình)
+            if (member.getUser().getUserId().equals(userId)) {
+                continue;
+            }
+
+            // Bỏ qua thành viên đã bị xóa mềm
+            if (member.isDeleted()) {
+                continue;
+            }
+
+            try {
+                notificationService.createUserNotification(
+                        member.getUser().getUserId(),
+                        Notification.NotificationType.WALLET_DELETED,
+                        "Ví đã bị xóa",
+                        String.format("Ví \"%s\" đã bị xóa bởi chủ ví %s.", walletName, ownerEmail),
+                        walletId,
+                        "WALLET"
+                );
+            } catch (Exception e) {
+                // Log lỗi nhưng không throw để không ảnh hưởng đến việc xóa ví
+                System.err.println("Lỗi khi tạo thông báo cho thành viên khi xóa ví: " + e.getMessage());
+            }
+        }
+
+        // 8. Trả về thông tin
         DeleteWalletResponse response = new DeleteWalletResponse(
                 wallet.getWalletId(),
                 wallet.getWalletName(),

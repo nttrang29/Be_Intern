@@ -20,7 +20,7 @@ public class Notification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "passwordHash", "provider", 
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "passwordHash", "provider",
             "enabled", "locked", "deleted", "resetToken", "resetTokenExpiredAt", "lastActiveAt"})
     private User user; // null nếu gửi tới tất cả admin
 
@@ -63,6 +63,11 @@ public class Notification {
         FUND_AUTO_DEPOSIT_SUCCESS,  // User nhận: tự động nạp quỹ thành công
         FUND_AUTO_DEPOSIT_FAILED,   // User nhận: tự động nạp quỹ thất bại
         FUND_COMPLETED,         // User nhận: quỹ đã đạt mục tiêu
+        WALLET_INVITED,         // User nhận: được mời vào ví (role VIEW)
+        WALLET_ROLE_UPDATED,    // User nhận: quyền trong ví đã được nâng cấp (VIEW -> MEMBER)
+        WALLET_MEMBER_LEFT,     // Owner nhận: thành viên đã rời khỏi ví
+        WALLET_MEMBER_REMOVED,  // User nhận: bị xóa khỏi ví bởi chủ ví
+        WALLET_DELETED,         // User nhận: ví đã bị xóa bởi chủ ví
         SYSTEM_ANNOUNCEMENT     // Thông báo hệ thống
     }
 

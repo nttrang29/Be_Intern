@@ -31,6 +31,12 @@ public class WalletMember {
     @Column(name = "joined_at")
     private LocalDateTime joinedAt = LocalDateTime.now();
 
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     // Enum cho roles
     public enum WalletRole {
         OWNER,   // Chủ sở hữu ví
@@ -88,6 +94,26 @@ public class WalletMember {
 
     public void setJoinedAt(LocalDateTime joinedAt) {
         this.joinedAt = joinedAt;
+    }
+
+    public Boolean getDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(Boolean deleted) {
+        this.deleted = deleted;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deleted != null && deleted;
     }
 
     // Helper methods
