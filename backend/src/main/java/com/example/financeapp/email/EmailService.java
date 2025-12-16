@@ -199,5 +199,29 @@ public class EmailService {
                 + "Trân trọng,\nĐội ngũ MyWallet";
         send(email, subject, content);
     }
+
+    // ====== Gửi thông báo giao dịch định kỳ thất bại ======
+    public void sendScheduledTransactionFailedEmail(String email, String fullName,
+                                                    String walletName, String amount,
+                                                    String currency, String reason,
+                                                    String transactionType, String categoryName) {
+        String subject = "[MyWallet] ⚠️ Giao dịch định kỳ thất bại";
+        String content = "Xin chào " + fullName + ",\n\n"
+                + "Hệ thống không thể thực hiện giao dịch định kỳ của bạn.\n\n"
+                + "📊 Chi tiết giao dịch:\n"
+                + "   • Ví: " + walletName + "\n"
+                + "   • Loại: " + (transactionType.equalsIgnoreCase("expense") ? "Chi tiêu" : "Thu nhập") + "\n"
+                + "   • Danh mục: " + categoryName + "\n"
+                + "   • Số tiền: " + amount + " " + currency + "\n"
+                + "   • Lý do thất bại: " + reason + "\n"
+                + "\n"
+                + "💡 Gợi ý:\n"
+                + "   - Kiểm tra số dư ví của bạn\n"
+                + "   - Nạp thêm tiền vào ví nếu cần\n"
+                + "   - Hoặc điều chỉnh số tiền giao dịch định kỳ\n\n"
+                + "Đăng nhập vào ứng dụng để xử lý: https://mywallet.com\n\n"
+                + "Trân trọng,\nĐội ngũ MyWallet";
+        send(email, subject, content);
+    }
 }
 

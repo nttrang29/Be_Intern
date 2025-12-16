@@ -22,7 +22,7 @@ public interface ScheduledTransactionRepository extends JpaRepository<ScheduledT
      * - nextExecutionDate <= today
      * - executionTime <= currentTime
      * - (endDate IS NULL OR endDate >= today)
-     * 
+     *
      * Sử dụng JOIN FETCH để eager load các lazy entities (transactionType, wallet, category, user)
      * để tránh LazyInitializationException khi thực hiện trong scheduler
      */

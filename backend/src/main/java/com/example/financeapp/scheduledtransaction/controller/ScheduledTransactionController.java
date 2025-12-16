@@ -184,5 +184,31 @@ public class ScheduledTransactionController {
             return ResponseEntity.status(500).body(res);
         }
     }
+
+    /**
+     * Lấy lịch sử thực hiện của scheduled transaction
+     */
+    @GetMapping("/{id}/logs")
+    public ResponseEntity<Map<String, Object>> getExecutionLogs(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long scheduleId
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            var logs = scheduledTransactionService.getExecutionLogs(user.getUserId(), scheduleId);
+
+            res.put("logs", logs);
+            res.put("total", logs.size());
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
 }
 
