@@ -15,6 +15,7 @@ public class ExportRequest {
     private LocalDate endDate;   // null = không giới hạn
     private Long walletId;       // null = tất cả ví
     private ReportType reportType = ReportType.TRANSACTIONS; // Mặc định là báo cáo giao dịch
+    private String range;        // "day", "week", "month", "year" - để tính toán startDate/endDate tự động
 
     public enum ExportFormat {
         EXCEL, PDF
@@ -41,5 +42,8 @@ public class ExportRequest {
 
     public ReportType getReportType() { return reportType; }
     public void setReportType(ReportType reportType) { this.reportType = reportType; }
+
+    public String getRange() { return range; }
+    public void setRange(String range) { this.range = range; }
 }
 

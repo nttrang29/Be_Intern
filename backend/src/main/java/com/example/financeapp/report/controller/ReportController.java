@@ -142,6 +142,41 @@ public class ReportController {
         }
     }
 
+    /**
+     * Export PDF cho ReportsPage (theo wallet và range)
+     */
+    @PostMapping("/export/wallet-pdf")
+    public ResponseEntity<Resource> exportWalletPDF(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody ExportRequest request
+    ) {
+        try {
+            User user = userDetails.getUser();
+            request.setReportType(ExportRequest.ReportType.TRANSACTIONS);
+            request.setFormat(ExportRequest.ExportFormat.PDF);
+            
+            Resource resource = exportService.exportTransactions(user.getUserId(), request);
+            
+            // Tạo tên file
+            String walletName = "TatCaVi";
+            if (request.getWalletId() != null) {
+                // Có thể lấy tên ví từ request hoặc từ database
+                walletName = "Vi_" + request.getWalletId();
+            }
+            String rangeStr = request.getRange() != null ? request.getRange() : "all";
+            String fileName = String.format("BaoCao_%s_%s_%s", 
+                walletName, rangeStr, LocalDateTime.now().format(FILE_DATE_FORMATTER));
+            
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + ".pdf\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(resource);
+                    
+        } catch (Exception e) {
+            throw new RuntimeException("Lỗi khi xuất báo cáo PDF: " + e.getMessage(), e);
+        }
+    }
+
     private String generateFileName(ExportRequest request) {
         String prefix = switch (request.getReportType()) {
             case TRANSACTIONS -> "BaoCaoGiaoDich";
