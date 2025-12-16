@@ -15,9 +15,20 @@ public interface FundTransactionRepository extends JpaRepository<FundTransaction
         JOIN FETCH tx.fund f
         LEFT JOIN FETCH tx.performedBy u
         WHERE f.fundId = :fundId
-          AND (f.deleted IS NULL OR f.deleted = false)
         ORDER BY tx.createdAt DESC
         """)
     List<FundTransaction> findByFundId(@Param("fundId") Long fundId, Pageable pageable);
+
+    /**
+     * Tìm các giao dịch nạp tiền hôm nay (manual deposit) của quỹ
+     */
+    @Query("""
+        SELECT tx FROM FundTransaction tx
+        WHERE tx.fund.fundId = :fundId
+          AND tx.type = com.example.financeapp.fund.entity.FundTransactionType.DEPOSIT
+          AND tx.status = com.example.financeapp.fund.entity.FundTransactionStatus.SUCCESS
+          AND DATE(tx.createdAt) = CURRENT_DATE
+        """)
+    List<FundTransaction> findTodayManualDeposits(@Param("fundId") Long fundId);
 }
 

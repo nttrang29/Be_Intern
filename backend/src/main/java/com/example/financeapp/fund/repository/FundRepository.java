@@ -13,6 +13,9 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
 
     /**
      * Lấy tất cả quỹ của user (cả quỹ cá nhân và quỹ nhóm mà user tham gia)
+     * Bao gồm cả quỹ đã hoàn thành/tất toán (COMPLETED/CLOSED) để hiển thị trong báo cáo
+     * Logic: Quỹ COMPLETED/CLOSED luôn hiển thị (không quan tâm deleted),
+     *        quỹ khác chỉ hiển thị khi deleted = false
      */
     @Query("""
         SELECT DISTINCT f FROM Fund f
@@ -20,7 +23,8 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
         LEFT JOIN FETCH f.targetWallet
         LEFT JOIN FETCH f.sourceWallet
         LEFT JOIN FundMember fm ON fm.fund.fundId = f.fundId
-        WHERE (f.deleted = false OR f.deleted IS NULL)
+        WHERE (f.status = 'COMPLETED' OR f.status = 'CLOSED' 
+               OR (f.deleted = false OR f.deleted IS NULL))
           AND (f.owner.userId = :userId OR fm.user.userId = :userId)
         ORDER BY f.createdAt DESC
         """)

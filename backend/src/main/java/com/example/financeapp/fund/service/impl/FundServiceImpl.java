@@ -233,6 +233,15 @@ public class FundServiceImpl implements FundService {
                     .collect(Collectors.toList());
         }
 
+        // Ẩn quỹ đã tất toán (CLOSED) và đã hoàn thành (COMPLETED) khỏi danh sách quỹ
+        // (Nhưng vẫn hiển thị trong báo cáo qua getAllFunds)
+        funds = funds.stream()
+                .filter(f -> {
+                    // Chỉ hiển thị quỹ có status ACTIVE (ẩn COMPLETED và CLOSED)
+                    return f.getStatus() == FundStatus.ACTIVE;
+                })
+                .collect(Collectors.toList());
+
         return funds.stream()
                 .map(this::buildFundResponse)
                 .collect(Collectors.toList());
@@ -474,6 +483,47 @@ public class FundServiceImpl implements FundService {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Số tiền nạp phải lớn hơn 0");
         }
+
+        // Validation logic: Kiểm tra số tiền nạp theo tần suất (chỉ cho manual deposit)
+        // Bỏ qua validation cho AUTO_DEPOSIT và AUTO_DEPOSIT_RECOVERY
+        if (effectiveType == FundTransactionType.DEPOSIT && fund.getAmountPerPeriod() != null) {
+            BigDecimal amountPerPeriod = fund.getAmountPerPeriod();
+            BigDecimal minAmount = new BigDecimal("1000"); // Tối thiểu 1,000 VND
+
+            // Tính tổng số tiền đã nạp hôm nay (manual deposit)
+            List<FundTransaction> todayDeposits = fundTransactionRepository.findTodayManualDeposits(fundId);
+            BigDecimal todayDepositedAmount = todayDeposits.stream()
+                    .map(FundTransaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Kiểm tra xem hôm nay đã nạp đủ tần suất chưa
+            boolean hasEnoughToday = todayDepositedAmount.compareTo(amountPerPeriod) >= 0;
+
+            if (!hasEnoughToday) {
+                // Chưa nạp đủ hôm nay: yêu cầu amount >= amountPerPeriod
+                if (amount.compareTo(amountPerPeriod) < 0) {
+                    throw new RuntimeException(
+                            String.format("Số tiền nạp phải lớn hơn hoặc bằng số tiền theo tần suất: %,.0f %s",
+                                    amountPerPeriod, fund.getTargetWallet().getCurrencyCode()));
+                }
+            } else {
+                // Đã nạp đủ hôm nay: chỉ yêu cầu amount >= 1,000 VND
+                if (amount.compareTo(minAmount) < 0) {
+                    throw new RuntimeException(
+                            String.format("Số tiền nạp tối thiểu là %,.0f %s",
+                                    minAmount, fund.getTargetWallet().getCurrencyCode()));
+                }
+            }
+        } else if (effectiveType == FundTransactionType.DEPOSIT) {
+            // Không có amountPerPeriod: chỉ yêu cầu >= 1,000 VND
+            BigDecimal minAmount = new BigDecimal("1000");
+            if (amount.compareTo(minAmount) < 0) {
+                throw new RuntimeException(
+                        String.format("Số tiền nạp tối thiểu là %,.0f %s",
+                                minAmount, fund.getTargetWallet().getCurrencyCode()));
+            }
+        }
+
         // Lấy ví nguồn và ví đích với lock để đảm bảo nhất quán số dư
         Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
@@ -877,10 +927,14 @@ public class FundServiceImpl implements FundService {
                     break;
             }
         } else {
-            // Quỹ không kỳ hạn: startDate có thể null
+            // Quỹ không kỳ hạn: startDate có thể null, endDate phải là null
+            // Cho phép startDate = today hoặc > today (không chỉ > today)
             if (request.getStartDate() != null && request.getStartDate().isBefore(today)) {
                 throw new RuntimeException("Ngày bắt đầu phải lớn hơn hoặc bằng ngày hiện tại");
             }
+
+            // Không cần validate endDate cho quỹ không kỳ hạn
+            // endDate sẽ được set thành null trong code tạo quỹ (dòng 140)
         }
 
         // Validate reminder
