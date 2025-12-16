@@ -72,7 +72,8 @@ public class Notification {
         WALLET_TRANSACTION,     // User nhận: có giao dịch mới trong ví được chia sẻ
         SCHEDULED_TRANSACTION_FAILED,   // User nhận: giao dịch tự động thất bại (không đủ số dư)
         SCHEDULED_TRANSACTION_SUCCESS,  // User nhận: giao dịch tự động thành công
-        SYSTEM_ANNOUNCEMENT     // Thông báo hệ thống
+        SYSTEM_ANNOUNCEMENT,     // Thông báo hệ thống
+        ROLE_CHANGED            // User nhận: admin đã thay đổi quyền của bạn
     }
 
     // Getters & Setters

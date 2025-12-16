@@ -5,6 +5,8 @@ import com.example.financeapp.admin.entity.AdminActionLog;
 import com.example.financeapp.admin.repository.AdminActionLogRepository;
 import com.example.financeapp.exception.ApiErrorCode;
 import com.example.financeapp.exception.ApiException;
+import com.example.financeapp.notification.entity.Notification;
+import com.example.financeapp.notification.service.NotificationService;
 import com.example.financeapp.security.CustomUserDetails;
 import com.example.financeapp.security.Role;
 import com.example.financeapp.user.entity.User;
@@ -20,10 +22,12 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final AdminActionLogRepository adminActionLogRepository;
+    private final NotificationService notificationService;
 
-    public AdminUserService(UserRepository userRepository, AdminActionLogRepository adminActionLogRepository) {
+    public AdminUserService(UserRepository userRepository, AdminActionLogRepository adminActionLogRepository, NotificationService notificationService) {
         this.userRepository = userRepository;
         this.adminActionLogRepository = adminActionLogRepository;
+        this.notificationService = notificationService;
     }
 
     // Map User -> AdminUserResponse
@@ -227,6 +231,20 @@ public class AdminUserService {
         userRepository.save(target);
 
         logAction(admin, target, "CHANGE_ROLE", "Admin đổi role từ " + oldRole + " sang " + newRole);
+
+        // Tạo thông báo cho user khi role bị thay đổi
+        String roleName = newRole == Role.ADMIN ? "Admin" : "User";
+        String title = "Quyền của bạn đã được thay đổi";
+        String message = String.format("Admin đã thay đổi quyền của bạn thành %s. Vui lòng đăng nhập lại để áp dụng thay đổi.", roleName);
+        
+        notificationService.createUserNotification(
+                target.getUserId(),
+                Notification.NotificationType.ROLE_CHANGED,
+                title,
+                message,
+                target.getUserId(),
+                "USER_ROLE"
+        );
 
         return toUserResponse(target);
     }
