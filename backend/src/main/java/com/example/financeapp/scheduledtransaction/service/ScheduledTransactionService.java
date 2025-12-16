@@ -28,6 +28,12 @@ public interface ScheduledTransactionService {
     ScheduledTransactionResponse getScheduledTransactionById(Long userId, Long scheduleId);
 
     /**
+     * Khởi động lại scheduled transaction đã thất bại
+     * Cập nhật schedule với thời gian mới, giữ lại logs cũ
+     */
+    ScheduledTransactionResponse restartScheduledTransaction(Long userId, Long scheduleId, CreateScheduledTransactionRequest request);
+
+    /**
      * Xóa scheduled transaction (xóa hoàn toàn khỏi database)
      */
     void deleteScheduledTransaction(Long userId, Long scheduleId);

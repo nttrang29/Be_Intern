@@ -134,6 +134,35 @@ public class ScheduledTransactionController {
     }
 
     /**
+     * Khởi động lại scheduled transaction đã thất bại
+     * Cập nhật schedule với thời gian mới, giữ lại logs cũ
+     */
+    @PutMapping("/{id}/restart")
+    public ResponseEntity<Map<String, Object>> restartScheduledTransaction(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long scheduleId,
+            @Valid @RequestBody CreateScheduledTransactionRequest request
+    ) {
+        Map<String, Object> res = new HashMap<>();
+        try {
+            User user = userDetails.getUser();
+            ScheduledTransactionResponse scheduled = scheduledTransactionService
+                    .restartScheduledTransaction(user.getUserId(), scheduleId, request);
+
+            res.put("message", "Đã khởi động lại lịch giao dịch");
+            res.put("scheduledTransaction", scheduled);
+            return ResponseEntity.ok(res);
+
+        } catch (RuntimeException e) {
+            res.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(res);
+        } catch (Exception e) {
+            res.put("error", "Lỗi hệ thống: " + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
+    /**
      * Hủy scheduled transaction (đổi status thành CANCELLED, không xóa)
      */
     @PutMapping("/{id}/cancel")

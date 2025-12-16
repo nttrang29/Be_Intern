@@ -204,6 +204,72 @@ public class ScheduledTransactionServiceImpl implements ScheduledTransactionServ
 
     @Override
     @Transactional
+    public ScheduledTransactionResponse restartScheduledTransaction(Long userId, Long scheduleId, CreateScheduledTransactionRequest request) {
+        ScheduledTransaction scheduled = scheduledTransactionRepository.findById(scheduleId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch giao dịch"));
+
+        // Kiểm tra quyền: user phải là owner của schedule HOẶC có quyền truy cập wallet của schedule
+        boolean isOwner = scheduled.getUser().getUserId().equals(userId);
+        boolean hasWalletAccess = walletService.hasAccess(scheduled.getWallet().getWalletId(), userId);
+
+        if (!isOwner && !hasWalletAccess) {
+            throw new RuntimeException("Bạn không có quyền khởi động lại lịch giao dịch này");
+        }
+
+        // Chỉ cho phép restart các schedule đã FAILED
+        if (scheduled.getStatus() != ScheduleStatus.FAILED) {
+            throw new RuntimeException("Chỉ có thể khởi động lại các lịch giao dịch đã thất bại");
+        }
+
+        // Cập nhật thông tin từ request (chủ yếu là thời gian mới)
+        // Validate và lấy wallet mới (nếu có thay đổi)
+        Wallet wallet = walletRepository.findById(request.getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví không tồn tại"));
+
+        // Kiểm tra quyền truy cập wallet (bao gồm cả ví được chia sẻ)
+        if (!walletService.hasAccess(wallet.getWalletId(), userId)) {
+            throw new RuntimeException("Bạn không có quyền truy cập ví này");
+        }
+
+        // Validate category
+        Category category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new RuntimeException("Danh mục không tồn tại"));
+
+        // Validate TransactionType
+        TransactionType transactionType = transactionTypeRepository.findById(request.getTransactionTypeId())
+                .orElseThrow(() -> new RuntimeException("Loại giao dịch không hợp lệ"));
+
+        // Cập nhật scheduled transaction
+        scheduled.setWallet(wallet);
+        scheduled.setCategory(category);
+        scheduled.setTransactionType(transactionType);
+        scheduled.setAmount(request.getAmount());
+        scheduled.setNote(request.getNote());
+        scheduled.setScheduleType(request.getScheduleType());
+        scheduled.setExecutionTime(request.getExecutionTime());
+        scheduled.setEndDate(request.getEndDate());
+
+        // Set các trường theo schedule type
+        scheduled.setDayOfWeek(request.getDayOfWeek());
+        scheduled.setDayOfMonth(request.getDayOfMonth());
+        scheduled.setMonth(request.getMonth());
+        scheduled.setDay(request.getDay());
+
+        // Reset status về PENDING
+        scheduled.setStatus(ScheduleStatus.PENDING);
+
+        // Tính nextExecutionDate mới
+        scheduled.setNextExecutionDate(calculateInitialNextExecutionDate(request));
+
+        // Giữ nguyên logs cũ, không reset completedCount và failedCount
+
+        scheduled = scheduledTransactionRepository.save(scheduled);
+
+        return ScheduledTransactionResponse.fromEntity(scheduled);
+    }
+
+    @Override
+    @Transactional
     public void executeScheduledTransaction(ScheduledTransaction scheduled) {
         BigDecimal walletBalanceBefore = BigDecimal.ZERO;
         BigDecimal walletBalanceAfter = BigDecimal.ZERO;

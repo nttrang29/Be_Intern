@@ -676,35 +676,32 @@ public class FundServiceImpl implements FundService {
             throw new RuntimeException("Số dư ví quỹ không đủ để rút số tiền này");
         }
 
-        // Nếu đây là quỹ có kỳ hạn (đã hoàn thành), chuyển tiền về ví nguồn
-        if (Boolean.TRUE.equals(fund.getHasDeadline())) {
-            Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
-                    .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
+        // Lấy ví nguồn với lock (cho cả quỹ có kỳ hạn và không kỳ hạn)
+        Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
+                .orElseThrow(() -> new RuntimeException("Ví nguồn không tồn tại"));
 
-            // Kiểm tra quyền trên ví nguồn (dù chủ quỹ thường là chủ ví nguồn)
-            if (!walletService.hasAccess(sourceWallet.getWalletId(), userId)) {
-                throw new RuntimeException("Bạn không có quyền truy cập ví nguồn của quỹ");
-            }
-
-            // Chuyển tiền: trừ ví quỹ, cộng ví nguồn
-            targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
-            sourceWallet.setBalance(sourceWallet.getBalance().add(amount));
-
-            walletRepository.save(targetWallet);
-            walletRepository.save(sourceWallet);
-
-        } else {
-            // Quỹ không kỳ hạn: giữ nguyên hành vi cũ — chỉ trừ ví quỹ
-            targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
-            walletRepository.save(targetWallet);
+        // Kiểm tra quyền trên ví nguồn (dù chủ quỹ thường là chủ ví nguồn)
+        if (!walletService.hasAccess(sourceWallet.getWalletId(), userId)) {
+            throw new RuntimeException("Bạn không có quyền truy cập ví nguồn của quỹ");
         }
+
+        // Chuyển tiền: trừ ví quỹ, cộng ví nguồn (cho cả quỹ có kỳ hạn và không kỳ hạn)
+        targetWallet.setBalance(targetWallet.getBalance().subtract(amount));
+        sourceWallet.setBalance(sourceWallet.getBalance().add(amount));
+
+        walletRepository.save(targetWallet);
+        walletRepository.save(sourceWallet);
 
         // Trừ số tiền quỹ
         fund.setCurrentAmount(fund.getCurrentAmount().subtract(amount));
 
-        // Nếu quỹ còn 0, đóng quỹ
+        // Nếu quỹ còn 0: chỉ đóng quỹ có thời hạn, quỹ không thời hạn vẫn giữ status ACTIVE để người dùng có thể nạp tiền lại hoặc xóa thủ công
         if (fund.getCurrentAmount().compareTo(BigDecimal.ZERO) == 0) {
-            fund.setStatus(FundStatus.CLOSED);
+            // Chỉ tự động đóng quỹ có thời hạn khi rút hết
+            if (Boolean.TRUE.equals(fund.getHasDeadline())) {
+                fund.setStatus(FundStatus.CLOSED);
+            }
+            // Quỹ không thời hạn: giữ nguyên status ACTIVE, người dùng có thể xóa thủ công hoặc nạp tiền lại
         }
 
         fund = fundRepository.save(fund);

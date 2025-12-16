@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Entity cho giao dịch đặt lịch hẹn
@@ -90,6 +92,10 @@ public class ScheduledTransaction {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+    // Relationship với logs - cascade delete khi xóa schedule
+    @OneToMany(mappedBy = "scheduledTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<ScheduledTransactionLog> logs = new ArrayList<>();
+
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
@@ -98,6 +104,9 @@ public class ScheduledTransaction {
     // Getters & Setters
     public Long getScheduleId() { return scheduleId; }
     public void setScheduleId(Long scheduleId) { this.scheduleId = scheduleId; }
+
+    public List<ScheduledTransactionLog> getLogs() { return logs; }
+    public void setLogs(List<ScheduledTransactionLog> logs) { this.logs = logs; }
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
