@@ -33,20 +33,27 @@ import com.example.financeapp.wallet.service.ExchangeRateService;
 import com.example.financeapp.wallet.service.WalletService;
 import com.example.financeapp.notification.service.NotificationService;
 import com.example.financeapp.notification.entity.Notification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 public class WalletServiceImpl implements WalletService {
+
+    private static final Logger log = LoggerFactory.getLogger(WalletServiceImpl.class);
 
     @Autowired private WalletRepository walletRepository;
     @Autowired private UserRepository userRepository;
@@ -1551,6 +1558,90 @@ public class WalletServiceImpl implements WalletService {
         response.setFromWalletMemberCount((int) sourceMembers);
         response.setToWalletIsShared(targetShared);
         response.setToWalletMemberCount((int) targetMembers);
+
+        // 14. Tạo thông báo cho các thành viên khác trong ví nguồn và ví đích (nếu có)
+        try {
+            // Luôn dùng email thay vì tên
+            String actorEmail = user.getEmail() != null && !user.getEmail().isBlank()
+                    ? user.getEmail()
+                    : "Người dùng";
+
+            // Format số tiền với dấu chấm mỗi 3 số từ bên phải
+            DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
+            symbols.setGroupingSeparator('.');
+            DecimalFormat formatter = new DecimalFormat("#,##0", symbols);
+            formatter.setGroupingSize(3);
+
+            // Thông báo cho ví nguồn (từ ví bị trừ tiền)
+            List<WalletMember> fromWalletMembers = walletMemberRepository.findByWallet_WalletId(fromWallet.getWalletId());
+            if (fromWalletMembers != null && fromWalletMembers.size() > 1) {
+                String fromWalletName = fromWallet.getWalletName() != null ? fromWallet.getWalletName() : "ví";
+                String formattedFromAmount = formatter.format(sourceAmount.stripTrailingZeros());
+                String fromAmountStr = formattedFromAmount + " " + fromWallet.getCurrencyCode();
+
+                String toWalletName = toWallet.getWalletName() != null ? toWallet.getWalletName() : "ví";
+                String title = "Chuyển tiền từ ví được chia sẻ";
+                String message = String.format("%s đã chuyển %s từ ví \"%s\" sang ví \"%s\".",
+                        actorEmail, fromAmountStr, fromWalletName, toWalletName);
+
+                for (WalletMember member : fromWalletMembers) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    // Không gửi thông báo cho chính người thực hiện giao dịch
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            fromWallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+
+            // Thông báo cho ví đích (vào ví được cộng tiền)
+            List<WalletMember> toWalletMembers = walletMemberRepository.findByWallet_WalletId(toWallet.getWalletId());
+            if (toWalletMembers != null && toWalletMembers.size() > 1) {
+                String toWalletName = toWallet.getWalletName() != null ? toWallet.getWalletName() : "ví";
+
+                // Format số tiền theo currency của ví đích (có thể đã được chuyển đổi)
+                String formattedToAmount;
+                if (!fromWallet.getCurrencyCode().equals(toWallet.getCurrencyCode())) {
+                    formattedToAmount = formatter.format(targetAmount.stripTrailingZeros());
+                } else {
+                    formattedToAmount = formatter.format(sourceAmount.stripTrailingZeros());
+                }
+                String toAmountStr = formattedToAmount + " " + toWallet.getCurrencyCode();
+
+                String fromWalletName = fromWallet.getWalletName() != null ? fromWallet.getWalletName() : "ví";
+                String title = "Nhận tiền vào ví được chia sẻ";
+                String message = String.format("%s đã chuyển %s từ ví \"%s\" sang ví \"%s\".",
+                        actorEmail, toAmountStr, fromWalletName, toWalletName);
+
+                for (WalletMember member : toWalletMembers) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    // Không gửi thông báo cho chính người thực hiện giao dịch
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            toWallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+        } catch (Exception e) {
+            // Không để lỗi thông báo làm hỏng giao dịch chuyển tiền
+            // Log lỗi nhưng không throw exception
+            log.warn("Không thể tạo thông báo WALLET_TRANSACTION cho chuyển tiền từ ví {} sang ví {}: {}",
+                    fromWallet.getWalletId(), toWallet.getWalletId(), e.getMessage());
+        }
 
         return response;
     }
