@@ -27,8 +27,8 @@ import java.util.UUID;
 @Service
 public class AuthServiceImpl implements AuthService {
 
-    private static final int REGISTER_OTP_EXPIRE_SECONDS = 60; // 1 phút
-    private static final int FORGOT_OTP_EXPIRE_SECONDS = 60; // 1 phút
+    private static final int REGISTER_OTP_EXPIRE_SECONDS = 70; // 1 phút
+    private static final int FORGOT_OTP_EXPIRE_SECONDS = 70; // 1 phút
 
     private final UserRepository userRepository;
     private final OtpTokenRepository otpTokenRepository;
