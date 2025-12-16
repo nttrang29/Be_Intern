@@ -50,6 +50,10 @@ public class Wallet {
     @JsonProperty("isDefault")
     private boolean isDefault = false;
 
+    @Column(name = "is_fund_wallet")
+    @JsonProperty("isFundWallet")
+    private boolean isFundWallet = false; // ✨ NEW: Đánh dấu ví quỹ (tự động tạo khi tạo fund)
+
     // NEW: Phân loại ví (Cá nhân / Nhóm)
     @Column(name = "wallet_type", length = 20)
     private String walletType = "PERSONAL"; // PERSONAL hoặc GROUP
@@ -167,5 +171,13 @@ public class Wallet {
 
     public void setDeleted(boolean deleted) {
         this.deleted = deleted;
+    }
+
+    public boolean isFundWallet() {
+        return isFundWallet;
+    }
+
+    public void setFundWallet(boolean fundWallet) {
+        isFundWallet = fundWallet;
     }
 }

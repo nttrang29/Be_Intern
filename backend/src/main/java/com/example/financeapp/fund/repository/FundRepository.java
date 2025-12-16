@@ -337,5 +337,15 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
             @Param("currentTime") java.time.LocalTime currentTime,
             @Param("currentDateTime") java.time.LocalDateTime currentDateTime
     );
+
+    /**
+     * Đếm số lượng fund đang active (chưa bị xóa) sử dụng source wallet
+     */
+    @Query("""
+        SELECT COUNT(f) FROM Fund f
+        WHERE f.sourceWallet.walletId = :walletId
+          AND (f.deleted = false OR f.deleted IS NULL)
+        """)
+    long countBySourceWallet_WalletIdAndDeletedFalse(@Param("walletId") Long walletId);
 }
 

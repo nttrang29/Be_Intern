@@ -182,6 +182,7 @@ public class WalletServiceImpl implements WalletService {
             dto.setTotalMembers((int) totalMembers);
             dto.setTransactionCount((int) transactionCount);
             dto.setDefault(wallet.isDefault());
+            dto.setFundWallet(wallet.isFundWallet()); // ✨ Map isFundWallet vào DTO
             dto.setCreatedAt(wallet.getCreatedAt());
             dto.setUpdatedAt(wallet.getUpdatedAt());
 

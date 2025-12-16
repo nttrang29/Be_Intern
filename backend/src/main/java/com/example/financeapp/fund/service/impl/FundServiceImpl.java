@@ -101,17 +101,22 @@ public class FundServiceImpl implements FundService {
         // 3. Validate theo loại quỹ và kỳ hạn
         validateFundRequest(request);
 
-        // 4. TỰ ĐỘNG TẠO VÍ QUỸ (Target Wallet)
+        // 4. Đánh dấu source wallet là ví quỹ
+        sourceWallet.setFundWallet(true);
+        walletRepository.save(sourceWallet);
+
+        // 5. TỰ ĐỘNG TẠO VÍ QUỸ (Target Wallet)
         Wallet targetWallet = new Wallet();
         targetWallet.setUser(user);
         targetWallet.setWalletName(request.getFundName() + " - Ví Quỹ");
         targetWallet.setCurrencyCode(sourceWallet.getCurrencyCode()); // Cùng loại tiền với ví nguồn
         targetWallet.setBalance(BigDecimal.ZERO); // Bắt đầu từ 0
         targetWallet.setWalletType("PERSONAL");
+        targetWallet.setFundWallet(true); // ✨ Đánh dấu đây là ví quỹ
         targetWallet.setDescription("Ví quỹ tự động tạo cho: " + request.getFundName());
         targetWallet = walletRepository.save(targetWallet);
 
-        // 5. Tạo quỹ
+        // 6. Tạo quỹ
         Fund fund = new Fund();
         fund.setOwner(user);
         fund.setTargetWallet(targetWallet); // Ví quỹ vừa tạo
@@ -449,10 +454,33 @@ public class FundServiceImpl implements FundService {
             throw new RuntimeException("Chỉ chủ quỹ mới được xóa quỹ");
         }
 
+        // Lưu thông tin wallets trước khi xóa
+        Wallet sourceWallet = fund.getSourceWallet();
+        Wallet targetWallet = fund.getTargetWallet();
+
+        // Xóa mềm fund
         fund.setStatus(FundStatus.CLOSED);
         fund.setDeleted(true);
         fund.setDeletedAt(LocalDateTime.now());
         fundRepository.save(fund);
+
+        // Kiểm tra và cập nhật isFundWallet cho source wallet
+        if (sourceWallet != null) {
+            // Kiểm tra xem source wallet có còn được dùng bởi fund khác không (chưa bị xóa)
+            long activeFundsCount = fundRepository.countBySourceWallet_WalletIdAndDeletedFalse(
+                    sourceWallet.getWalletId());
+            if (activeFundsCount == 0) {
+                // Không còn fund nào dùng source wallet này, bỏ đánh dấu ví quỹ
+                sourceWallet.setFundWallet(false);
+                walletRepository.save(sourceWallet);
+            }
+        }
+
+        // Bỏ đánh dấu ví quỹ cho target wallet (vì ví quỹ chỉ dùng cho fund này)
+        if (targetWallet != null) {
+            targetWallet.setFundWallet(false);
+            walletRepository.save(targetWallet);
+        }
     }
 
     @Override

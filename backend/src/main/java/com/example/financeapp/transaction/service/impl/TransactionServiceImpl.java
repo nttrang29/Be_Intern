@@ -27,6 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import java.util.List;
 
 @Service
@@ -222,13 +225,18 @@ public class TransactionServiceImpl implements TransactionService {
             // Nếu chỉ có 1 member (không phải ví chia sẻ) thì không gửi thông báo
             if (members != null && members.size() > 1) {
                 String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
-                String actorName = user.getFullName() != null && !user.getFullName().isBlank()
-                        ? user.getFullName()
-                        : (user.getEmail() != null ? user.getEmail() : "Người dùng");
+                // Luôn dùng email thay vì tên
+                String actorEmail = user.getEmail() != null && !user.getEmail().isBlank()
+                        ? user.getEmail()
+                        : "Người dùng";
 
-                // Format số tiền + currency để đưa vào nội dung
-                String amountStr = req.getAmount().stripTrailingZeros().toPlainString()
-                        + " " + wallet.getCurrencyCode();
+                // Format số tiền với dấu chấm mỗi 3 số từ bên phải
+                DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
+                symbols.setGroupingSeparator('.');
+                DecimalFormat formatter = new DecimalFormat("#,##0", symbols);
+                formatter.setGroupingSize(3);
+                String formattedAmount = formatter.format(req.getAmount().stripTrailingZeros());
+                String amountStr = formattedAmount + " " + wallet.getCurrencyCode();
 
                 boolean isExpense = "Chi tiêu".equals(typeName);
 
@@ -237,8 +245,8 @@ public class TransactionServiceImpl implements TransactionService {
                         : "Nạp tiền vào ví được chia sẻ";
 
                 String message = isExpense
-                        ? String.format("%s đã chi %s từ ví \"%s\".", actorName, amountStr, walletName)
-                        : String.format("%s đã nạp %s vào ví \"%s\".", actorName, amountStr, walletName);
+                        ? String.format("%s đã chi %s từ ví \"%s\".", actorEmail, amountStr, walletName)
+                        : String.format("%s đã nạp %s vào ví \"%s\".", actorEmail, amountStr, walletName);
 
                 for (WalletMember member : members) {
                     if (member.getUser() == null) continue;

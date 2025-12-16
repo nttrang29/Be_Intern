@@ -22,6 +22,8 @@ public class SharedWalletDTO {
     private int transactionCount; // Số lượng giao dịch trong ví
     @JsonProperty("isDefault")
     private boolean isDefault; // ✨ NEW: Ví có phải là ví mặc định không
+    @JsonProperty("isFundWallet")
+    private boolean isFundWallet = false; // ✨ NEW: Ví có phải là ví quỹ không
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -153,6 +155,14 @@ public class SharedWalletDTO {
 
     public void setDefault(boolean isDefault) {
         this.isDefault = isDefault;
+    }
+
+    public boolean isFundWallet() {
+        return isFundWallet;
+    }
+
+    public void setFundWallet(boolean fundWallet) {
+        isFundWallet = fundWallet;
     }
 }
 
