@@ -23,6 +23,8 @@ public class WalletTransferHistoryDTO {
     private UserInfo creator;
     private WalletEdge fromWallet;
     private WalletEdge toWallet;
+    private Boolean isDeleted;
+    private Boolean isEdited;
 
     public enum Direction {
         OUTGOING,
@@ -148,6 +150,22 @@ public class WalletTransferHistoryDTO {
 
     public void setToWallet(WalletEdge toWallet) {
         this.toWallet = toWallet;
+    }
+
+    public Boolean getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(Boolean isDeleted) {
+        this.isDeleted = isDeleted;
+    }
+
+    public Boolean getIsEdited() {
+        return isEdited;
+    }
+
+    public void setIsEdited(Boolean isEdited) {
+        this.isEdited = isEdited;
     }
 
     public static class WalletEdge {

@@ -1649,7 +1649,7 @@ public class WalletServiceImpl implements WalletService {
     // ---------------- GET ALL TRANSFERS ----------------
     @Override
     public List<WalletTransfer> getAllTransfers(Long userId) {
-        return walletTransferRepository.findByUser_UserIdOrderByTransferDateDesc(userId);
+        return walletTransferRepository.findByUser_UserIdOrderByTransferDateDescIncludingDeleted(userId);
     }
 
     // ---------------- UPDATE TRANSFER ----------------
@@ -1665,15 +1665,122 @@ public class WalletServiceImpl implements WalletService {
             throw new RuntimeException("Bạn không có quyền chỉnh sửa giao dịch này");
         }
 
-        // 3. Cập nhật chỉ note
+        // 3. Cập nhật note
         if (request.getNote() != null) {
             transfer.setNote(request.getNote().trim().isEmpty() ? null : request.getNote().trim());
         } else {
             transfer.setNote(null);
         }
 
-        // 4. Lưu và trả về
-        return walletTransferRepository.save(transfer);
+        // 4. Cập nhật ngày giao dịch
+        if (request.getTransferDate() != null) {
+            transfer.setTransferDate(request.getTransferDate());
+        }
+
+        // 5. Cập nhật số tiền (nếu có thay đổi)
+        if (request.getAmount() != null && request.getAmount().compareTo(BigDecimal.ZERO) > 0
+                && request.getAmount().compareTo(transfer.getAmount()) != 0) {
+
+            BigDecimal oldAmount = transfer.getAmount();
+            BigDecimal newAmount = request.getAmount();
+
+            // Lock wallets
+            Wallet fromWallet = walletRepository.findByIdWithLock(transfer.getFromWallet().getWalletId())
+                    .orElseThrow(() -> new RuntimeException("Ví gửi không tồn tại"));
+            Wallet toWallet = walletRepository.findByIdWithLock(transfer.getToWallet().getWalletId())
+                    .orElseThrow(() -> new RuntimeException("Ví nhận không tồn tại"));
+
+            // Revert old amount
+            fromWallet.setBalance(fromWallet.getBalance().add(oldAmount));
+            toWallet.setBalance(toWallet.getBalance().subtract(oldAmount));
+
+            // Apply new amount
+            BigDecimal newFromBalance = fromWallet.getBalance().subtract(newAmount);
+            if (newFromBalance.compareTo(BigDecimal.ZERO) < 0) {
+                throw new RuntimeException("Số dư ví gửi không đủ để thực hiện cập nhật (Số dư: " +
+                        fromWallet.getBalance().add(oldAmount).stripTrailingZeros().toPlainString() + ", Cần: " + newAmount.stripTrailingZeros().toPlainString() + ")");
+            }
+
+            fromWallet.setBalance(newFromBalance);
+            toWallet.setBalance(toWallet.getBalance().add(newAmount));
+
+            walletRepository.save(fromWallet);
+            walletRepository.save(toWallet);
+
+            transfer.setAmount(newAmount);
+            // Nếu là cùng loại tiền tệ, update cả originalAmount
+            if (transfer.getOriginalAmount() != null && transfer.getExchangeRate() == null) {
+                transfer.setOriginalAmount(newAmount);
+            }
+        }
+
+        transfer.setIsEdited(true);
+
+        // 6. Lưu và trả về
+        WalletTransfer savedTransfer = walletTransferRepository.save(transfer);
+
+        // 7. Tạo thông báo cho các thành viên khác trong ví được chia sẻ (nếu có)
+        try {
+            User user = transfer.getUser();
+            String actorEmail = (user != null && user.getEmail() != null && !user.getEmail().isBlank())
+                    ? user.getEmail()
+                    : "Người dùng";
+
+            Wallet fromWallet = transfer.getFromWallet();
+            Wallet toWallet = transfer.getToWallet();
+
+            // Thông báo cho ví nguồn
+            List<WalletMember> fromMembers = walletMemberRepository.findByWallet_WalletId(fromWallet.getWalletId());
+            if (fromMembers != null && fromMembers.size() > 1) {
+                String walletName = fromWallet.getWalletName() != null ? fromWallet.getWalletName() : "ví";
+                String title = "Giao dịch chuyển tiền đã được chỉnh sửa";
+                String message = String.format("%s đã chỉnh sửa một giao dịch chuyển tiền từ ví \"%s\".", actorEmail, walletName);
+
+                for (WalletMember member : fromMembers) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            fromWallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+
+            // Thông báo cho ví đích (nếu khác ví nguồn)
+            if (!fromWallet.getWalletId().equals(toWallet.getWalletId())) {
+                List<WalletMember> toMembers = walletMemberRepository.findByWallet_WalletId(toWallet.getWalletId());
+                if (toMembers != null && toMembers.size() > 1) {
+                    String walletName = toWallet.getWalletName() != null ? toWallet.getWalletName() : "ví";
+                    String title = "Giao dịch chuyển tiền đã được chỉnh sửa";
+                    String message = String.format("%s đã chỉnh sửa một giao dịch chuyển tiền đến ví \"%s\".", actorEmail, walletName);
+
+                    for (WalletMember member : toMembers) {
+                        if (member.getUser() == null) continue;
+                        Long targetUserId = member.getUser().getUserId();
+                        if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                        notificationService.createUserNotification(
+                                targetUserId,
+                                Notification.NotificationType.WALLET_TRANSACTION,
+                                title,
+                                message,
+                                toWallet.getWalletId(),
+                                "WALLET"
+                        );
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không thể tạo thông báo update transfer: {}", e.getMessage());
+        }
+
+        return savedTransfer;
     }
 
     // ---------------- DELETE TRANSFER ----------------
@@ -1681,8 +1788,22 @@ public class WalletServiceImpl implements WalletService {
     @Transactional
     public void deleteTransfer(Long userId, Long transferId) {
         // 1. Tìm transfer với tất cả relationships
-        WalletTransfer transfer = walletTransferRepository.findByIdForDelete(transferId)
-                .orElseThrow(() -> new RuntimeException("Giao dịch chuyển tiền không tồn tại"));
+        Optional<WalletTransfer> transferOpt = walletTransferRepository.findByIdForDelete(transferId);
+
+        if (transferOpt.isEmpty()) {
+            // Nếu không tìm thấy, kiểm tra xem có phải đã bị xóa không (bỏ qua @Where)
+            Long ownerId = walletTransferRepository.getUserIdByTransferIdIncludingDeleted(transferId);
+            if (ownerId != null) {
+                // Tồn tại nhưng đã xóa (hoặc bị filter bởi @Where)
+                if (!ownerId.equals(userId)) {
+                    throw new RuntimeException("Bạn không có quyền xóa giao dịch này");
+                }
+                return; // Đã xóa và đúng chủ sở hữu -> Coi như thành công (Idempotent)
+            }
+            throw new RuntimeException("Giao dịch chuyển tiền không tồn tại");
+        }
+
+        WalletTransfer transfer = transferOpt.get();
 
         // 2. Kiểm tra quyền sở hữu
         if (transfer.getUser() == null || !transfer.getUser().getUserId().equals(userId)) {
@@ -1692,14 +1813,9 @@ public class WalletServiceImpl implements WalletService {
         // 3. Lấy wallets với PESSIMISTIC LOCK để tránh race condition
         Wallet fromWallet = walletRepository.findByIdWithLock(transfer.getFromWallet().getWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví gửi không tồn tại"));
-        if (fromWallet.isDeleted()) {
-            throw new RuntimeException("Ví gửi đã bị xóa");
-        }
+
         Wallet toWallet = walletRepository.findByIdWithLock(transfer.getToWallet().getWalletId())
                 .orElseThrow(() -> new RuntimeException("Ví nhận không tồn tại"));
-        if (toWallet.isDeleted()) {
-            throw new RuntimeException("Ví nhận đã bị xóa");
-        }
 
         // 4. Tính toán số tiền cần revert
         // Số tiền gốc (theo currency của ví gửi)
@@ -1707,7 +1823,27 @@ public class WalletServiceImpl implements WalletService {
 
         // Số tiền đã được cộng vào ví nhận (tính từ balance tracking)
         // Sử dụng toBalanceAfter - toBalanceBefore để có số tiền chính xác đã được cộng vào
-        BigDecimal targetAmountAdded = transfer.getToBalanceAfter().subtract(transfer.getToBalanceBefore());
+        BigDecimal targetAmountAdded;
+
+        // Nếu giao dịch đã được chỉnh sửa, balance tracking snapshots (toBalanceAfter/Before) có thể không còn chính xác
+        // vì chúng lưu trạng thái tại thời điểm tạo giao dịch.
+        // Trong trường hợp này, ta tính toán lại dựa trên amount hiện tại và exchange rate.
+        boolean isEdited = Boolean.TRUE.equals(transfer.getIsEdited());
+
+        if (!isEdited && transfer.getToBalanceAfter() != null && transfer.getToBalanceBefore() != null) {
+            targetAmountAdded = transfer.getToBalanceAfter().subtract(transfer.getToBalanceBefore());
+        } else {
+            // Fallback hoặc trường hợp đã edit: tính toán dựa trên amount hiện tại
+            if (transfer.getFromWallet().getCurrencyCode().equals(transfer.getToWallet().getCurrencyCode())) {
+                targetAmountAdded = transfer.getAmount();
+            } else if (transfer.getExchangeRate() != null) {
+                targetAmountAdded = transfer.getAmount().multiply(transfer.getExchangeRate());
+            } else {
+                // Trường hợp xấu nhất: không có balance tracking và không có exchange rate
+                // Tạm thời throw exception để tránh sai lệch số liệu
+                throw new RuntimeException("Dữ liệu giao dịch không đủ thông tin để hoàn tác chính xác. Vui lòng liên hệ admin.");
+            }
+        }
 
         // 5. Revert balance
         // Ví gửi: cộng lại số tiền (theo currency của ví gửi)
@@ -1728,8 +1864,67 @@ public class WalletServiceImpl implements WalletService {
         toWallet.setBalance(newToBalance);
         walletRepository.save(toWallet);
 
-        // 8. Xóa transfer
-        walletTransferRepository.delete(transfer);
+        // 8. Xóa transfer (Soft Delete)
+        // Sử dụng native query để đảm bảo update xảy ra bất chấp @Where clause
+        walletTransferRepository.softDelete(transferId);
+
+        // 9. Tạo thông báo cho các thành viên khác trong ví được chia sẻ (nếu có)
+        try {
+            User user = transfer.getUser();
+            String actorEmail = (user != null && user.getEmail() != null && !user.getEmail().isBlank())
+                    ? user.getEmail()
+                    : "Người dùng";
+
+            // Thông báo cho ví nguồn
+            List<WalletMember> fromMembers = walletMemberRepository.findByWallet_WalletId(fromWallet.getWalletId());
+            if (fromMembers != null && fromMembers.size() > 1) {
+                String walletName = fromWallet.getWalletName() != null ? fromWallet.getWalletName() : "ví";
+                String title = "Giao dịch chuyển tiền đã bị xóa";
+                String message = String.format("%s đã xóa một giao dịch chuyển tiền từ ví \"%s\".", actorEmail, walletName);
+
+                for (WalletMember member : fromMembers) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            fromWallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+
+            // Thông báo cho ví đích (nếu khác ví nguồn)
+            if (!fromWallet.getWalletId().equals(toWallet.getWalletId())) {
+                List<WalletMember> toMembers = walletMemberRepository.findByWallet_WalletId(toWallet.getWalletId());
+                if (toMembers != null && toMembers.size() > 1) {
+                    String walletName = toWallet.getWalletName() != null ? toWallet.getWalletName() : "ví";
+                    String title = "Giao dịch chuyển tiền đã bị xóa";
+                    String message = String.format("%s đã xóa một giao dịch chuyển tiền đến ví \"%s\".", actorEmail, walletName);
+
+                    for (WalletMember member : toMembers) {
+                        if (member.getUser() == null) continue;
+                        Long targetUserId = member.getUser().getUserId();
+                        if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                        notificationService.createUserNotification(
+                                targetUserId,
+                                Notification.NotificationType.WALLET_TRANSACTION,
+                                title,
+                                message,
+                                toWallet.getWalletId(),
+                                "WALLET"
+                        );
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không thể tạo thông báo delete transfer cho ví {} và {}: {}", fromWallet.getWalletId(), toWallet.getWalletId(), e.getMessage());
+        }
     }
 
     @Override
@@ -1747,7 +1942,7 @@ public class WalletServiceImpl implements WalletService {
     public List<WalletTransferHistoryDTO> getWalletTransfers(Long userId, Long walletId) {
         assertWalletAccess(walletId, userId);
 
-        List<WalletTransfer> transfers = walletTransferRepository.findByWalletId(walletId);
+        List<WalletTransfer> transfers = walletTransferRepository.findDetailedByWalletIdIncludingDeleted(walletId);
         return transfers.stream()
                 .map(transfer -> mapTransferHistory(transfer, walletId))
                 .collect(Collectors.toList());
@@ -1829,6 +2024,8 @@ public class WalletServiceImpl implements WalletService {
         dto.setUpdatedAt(transfer.getUpdatedAt());
         dto.setNote(transfer.getNote());
         dto.setStatus(transfer.getStatus().name());
+        dto.setIsDeleted(transfer.getIsDeleted());
+        dto.setIsEdited(transfer.getIsEdited());
         dto.setDirection(resolveDirection(transfer, walletId));
         dto.setCreator(buildTransferCreator(transfer.getUser()));
         dto.setFromWallet(buildWalletEdge(transfer.getFromWallet()));
