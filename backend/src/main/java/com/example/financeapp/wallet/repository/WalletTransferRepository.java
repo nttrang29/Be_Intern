@@ -2,6 +2,7 @@ package com.example.financeapp.wallet.repository;
 
 import com.example.financeapp.wallet.entity.WalletTransfer;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,7 +18,7 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
      * Lấy tất cả transfers của user (theo thời gian giảm dần)
      * Sử dụng JOIN FETCH để load các relationships và tránh lazy loading exception
      */
-        @Query("SELECT DISTINCT t FROM WalletTransfer t " +
+    @Query("SELECT DISTINCT t FROM WalletTransfer t " +
             "LEFT JOIN FETCH t.fromWallet " +
             "LEFT JOIN FETCH t.toWallet " +
             "LEFT JOIN FETCH t.user " +
@@ -29,7 +30,7 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
      * Lấy transfers của một ví cụ thể (cả gửi và nhận)
      * Sử dụng JOIN FETCH để load relationships và tránh lazy loading exception
      */
-        @Query("SELECT DISTINCT t FROM WalletTransfer t " +
+    @Query("SELECT DISTINCT t FROM WalletTransfer t " +
             "LEFT JOIN FETCH t.fromWallet " +
             "LEFT JOIN FETCH t.toWallet " +
             "LEFT JOIN FETCH t.user " +
@@ -46,6 +47,22 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
      * Lấy transfers đến một ví cụ thể (chỉ nhận vào)
      */
     List<WalletTransfer> findByToWallet_WalletIdOrderByTransferDateDesc(Long walletId);
+
+    /**
+     * Lấy tất cả transfers của user (theo thời gian giảm dần), bao gồm cả đã xóa (Native Query)
+     */
+    @Query(value = "SELECT * FROM wallet_transfers t " +
+            "WHERE t.user_id = :userId " +
+            "ORDER BY t.transfer_date DESC", nativeQuery = true)
+    List<WalletTransfer> findByUser_UserIdOrderByTransferDateDescIncludingDeleted(@Param("userId") Long userId);
+
+    /**
+     * Lấy transfers của một ví cụ thể (cả gửi và nhận), bao gồm cả đã xóa (Native Query)
+     */
+    @Query(value = "SELECT * FROM wallet_transfers t " +
+            "WHERE (t.from_wallet_id = :walletId OR t.to_wallet_id = :walletId) " +
+            "ORDER BY t.transfer_date DESC", nativeQuery = true)
+    List<WalletTransfer> findDetailedByWalletIdIncludingDeleted(@Param("walletId") Long walletId);
 
     /**
      * Lấy transfers trong khoảng thời gian
@@ -100,5 +117,18 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
             "LEFT JOIN FETCH t.toWallet " +
             "WHERE t.transferId = :transferId")
     Optional<WalletTransfer> findByIdForDelete(@Param("transferId") Long transferId);
+
+    /**
+     * Soft delete transfer bằng native query để tránh vấn đề với @Where clause
+     */
+    @Modifying
+    @Query(value = "UPDATE wallet_transfers SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE transfer_id = :transferId", nativeQuery = true)
+    void softDelete(@Param("transferId") Long transferId);
+
+    /**
+     * Lấy user_id của transfer (kể cả đã xóa) để kiểm tra quyền sở hữu khi transfer đã bị soft delete
+     */
+    @Query(value = "SELECT user_id FROM wallet_transfers WHERE transfer_id = :transferId", nativeQuery = true)
+    Long getUserIdByTransferIdIncludingDeleted(@Param("transferId") Long transferId);
 }
 

@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.Where;
+
 /**
  * Entity cho chuyển tiền nội bộ giữa các ví
  * Không cần category_id như transactions thông thường
@@ -20,6 +22,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_created_at", columnList = "created_at")
         }
 )
+@Where(clause = "is_deleted = false")
 public class WalletTransfer {
 
     @Id
@@ -269,5 +272,25 @@ public class WalletTransfer {
     public void setExchangeRate(BigDecimal exchangeRate) {
         this.exchangeRate = exchangeRate;
     }
+
+    // Soft delete flags
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    // Mark transfer has been edited
+    @Column(name = "is_edited")
+    private Boolean isEdited = false;
+
+    public Boolean getIsDeleted() { return isDeleted; }
+    public void setIsDeleted(Boolean isDeleted) { this.isDeleted = isDeleted; }
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
+    public Boolean getIsEdited() { return isEdited; }
+    public void setIsEdited(Boolean isEdited) { this.isEdited = isEdited; }
 }
 

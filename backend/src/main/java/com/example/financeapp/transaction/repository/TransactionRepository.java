@@ -14,6 +14,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     // Lấy giao dịch theo user
     List<Transaction> findByUser_UserIdOrderByTransactionDateDesc(Long userId);
 
+    @Query(value = "SELECT * FROM transactions WHERE user_id = :userId ORDER BY transaction_date DESC", nativeQuery = true)
+    List<Transaction> findAllByUser_UserIdOrderByTransactionDateDescIncludingDeleted(@Param("userId") Long userId);
+
     // Kiểm tra wallet có giao dịch không
     boolean existsByWallet_WalletId(Long walletId);
 
@@ -35,6 +38,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                 ORDER BY t.transactionDate DESC
                 """)
     List<Transaction> findDetailedByWalletId(@Param("walletId") Long walletId);
+
+    @Query(value = "SELECT * FROM transactions WHERE wallet_id = :walletId ORDER BY transaction_date DESC", nativeQuery = true)
+    List<Transaction> findDetailedByWalletIdIncludingDeleted(@Param("walletId") Long walletId);
 
     /**
      * Đếm số lượng transactions trong wallet

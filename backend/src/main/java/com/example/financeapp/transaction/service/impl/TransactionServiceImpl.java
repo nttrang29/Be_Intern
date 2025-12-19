@@ -349,7 +349,41 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         // 9. Lưu lại (updatedAt sẽ tự động cập nhật nhờ @PreUpdate)
-        return transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
+
+        // 10. Tạo thông báo cho các thành viên khác trong ví được chia sẻ (nếu có)
+        try {
+            List<WalletMember> members = walletMemberRepository.findByWallet_WalletId(wallet.getWalletId());
+            if (members != null && members.size() > 1) {
+                String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+                User user = transaction.getUser();
+                String actorEmail = (user != null && user.getEmail() != null && !user.getEmail().isBlank())
+                        ? user.getEmail()
+                        : "Người dùng";
+
+                String title = "Giao dịch đã được chỉnh sửa";
+                String message = String.format("%s đã chỉnh sửa một giao dịch trong ví \"%s\".", actorEmail, walletName);
+
+                for (WalletMember member : members) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            wallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không thể tạo thông báo update transaction cho ví {}: {}", wallet.getWalletId(), e.getMessage());
+        }
+
+        return savedTransaction;
     }
 
     @Override
@@ -394,10 +428,43 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setIsDeleted(true);
         transaction.setDeletedAt(LocalDateTime.now());
         transactionRepository.save(transaction);
+
+        // 8. Tạo thông báo cho các thành viên khác trong ví được chia sẻ (nếu có)
+        try {
+            List<WalletMember> members = walletMemberRepository.findByWallet_WalletId(wallet.getWalletId());
+            if (members != null && members.size() > 1) {
+                String walletName = wallet.getWalletName() != null ? wallet.getWalletName() : "ví";
+                User user = transaction.getUser();
+                String actorEmail = (user != null && user.getEmail() != null && !user.getEmail().isBlank())
+                        ? user.getEmail()
+                        : "Người dùng";
+
+                String title = "Giao dịch đã bị xóa";
+                String message = String.format("%s đã xóa một giao dịch trong ví \"%s\".", actorEmail, walletName);
+
+                for (WalletMember member : members) {
+                    if (member.getUser() == null) continue;
+                    Long targetUserId = member.getUser().getUserId();
+                    if (targetUserId != null && targetUserId.equals(userId)) continue;
+
+                    notificationService.createUserNotification(
+                            targetUserId,
+                            Notification.NotificationType.WALLET_TRANSACTION,
+                            title,
+                            message,
+                            wallet.getWalletId(),
+                            "WALLET"
+                    );
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không thể tạo thông báo delete transaction cho ví {}: {}", wallet.getWalletId(), e.getMessage());
+        }
     }
 
     @Override
     public List<Transaction> getAllTransactions(Long userId) {
-        return transactionRepository.findByUser_UserIdOrderByTransactionDateDesc(userId);
+        // Sử dụng native query để lấy cả các giao dịch đã bị xóa mềm (is_deleted = true)
+        return transactionRepository.findAllByUser_UserIdOrderByTransactionDateDescIncludingDeleted(userId);
     }
 }

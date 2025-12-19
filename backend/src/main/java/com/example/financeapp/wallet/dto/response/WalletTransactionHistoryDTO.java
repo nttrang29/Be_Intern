@@ -20,6 +20,8 @@ public class WalletTransactionHistoryDTO {
     private CategoryInfo category;
     private UserInfo creator;
     private WalletInfo wallet;
+    private Boolean isDeleted;
+    private Boolean isEdited;
 
     public Long getTransactionId() {
         return transactionId;
@@ -115,6 +117,22 @@ public class WalletTransactionHistoryDTO {
 
     public void setWallet(WalletInfo wallet) {
         this.wallet = wallet;
+    }
+
+    public Boolean getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(Boolean isDeleted) {
+        this.isDeleted = isDeleted;
+    }
+
+    public Boolean getIsEdited() {
+        return isEdited;
+    }
+
+    public void setIsEdited(Boolean isEdited) {
+        this.isEdited = isEdited;
     }
 
     public static class CategoryInfo {
