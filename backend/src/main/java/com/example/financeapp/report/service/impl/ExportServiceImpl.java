@@ -977,10 +977,12 @@ public class ExportServiceImpl implements ExportService {
                     String currency = "";
                     String memberName = "";
                     boolean isDeleted = false;
+                    boolean isEdited = false;
 
                     if (item instanceof Transaction) {
                         Transaction t = (Transaction) item;
                         isDeleted = Boolean.TRUE.equals(t.getIsDeleted());
+                        isEdited = Boolean.TRUE.equals(t.getIsEdited());
 
                         // Fix timezone: Transaction date is stored in UTC, convert to GMT+7 for display
                         dateTimeStr = t.getTransactionDate() != null
@@ -1010,6 +1012,7 @@ public class ExportServiceImpl implements ExportService {
                     } else if (item instanceof WalletTransfer) {
                         WalletTransfer t = (WalletTransfer) item;
                         isDeleted = Boolean.TRUE.equals(t.getIsDeleted());
+                        isEdited = Boolean.TRUE.equals(t.getIsEdited());
 
                         dateTimeStr = t.getTransferDate() != null
                                 ? t.getTransferDate().format(DATETIME_FORMATTER)
@@ -1068,6 +1071,8 @@ public class ExportServiceImpl implements ExportService {
                     String sttStr = String.valueOf(stt++);
                     if (isDeleted) {
                         sttStr += useUnicodeFont ? " (đã xoá)" : " (da xoa)";
+                    } else if (isEdited) {
+                        sttStr += useUnicodeFont ? " (đã sửa)" : " (da sua)";
                     }
                     contentStream.showText(sttStr);
                     contentStream.endText();
