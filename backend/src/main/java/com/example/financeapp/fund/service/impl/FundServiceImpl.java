@@ -1027,31 +1027,36 @@ public class FundServiceImpl implements FundService {
 
         for (Fund fund : pendingFunds) {
             try {
-                BigDecimal pending = fund.getPendingAutoTopupAmount() != null ? fund.getPendingAutoTopupAmount() : BigDecimal.ZERO;
+                // Reload fund with lock to ensure latest data and prevent race conditions
+                Fund currentFund = fundRepository.findByIdWithLock(fund.getFundId()).orElse(null);
+                if (currentFund == null) continue;
+
+                BigDecimal pending = currentFund.getPendingAutoTopupAmount() != null ? currentFund.getPendingAutoTopupAmount() : BigDecimal.ZERO;
                 if (pending.compareTo(BigDecimal.ZERO) <= 0) continue;
 
-                Wallet sourceWallet = walletRepository.findByIdWithLock(fund.getSourceWallet().getWalletId())
+                Wallet sourceWallet = walletRepository.findByIdWithLock(currentFund.getSourceWallet().getWalletId())
                         .orElse(null);
                 if (sourceWallet == null) continue;
                 if (sourceWallet.getBalance().compareTo(pending) < 0) continue;
 
                 depositToFund(
-                        fund.getOwner().getUserId(),
-                        fund.getFundId(),
+                        currentFund.getOwner().getUserId(),
+                        currentFund.getFundId(),
                         pending,
                         FundTransactionType.AUTO_DEPOSIT_RECOVERY,
                         "Tự động nạp bù sau khi ví được nạp thêm"
                 );
 
                 try {
-                    String title = "Nạp bù tự động thành công: " + fund.getFundName();
-                    String msg = "Đã nạp bù " + pending + " " + fund.getTargetWallet().getCurrencyCode() + " vào quỹ.";
+                    String title = "Nạp bù tự động thành công: " + currentFund.getFundName();
+                    String formattedAmount = String.format("%,.0f", pending).replace(",", ".");
+                    String msg = "Đã nạp bù " + formattedAmount + " " + currentFund.getTargetWallet().getCurrencyCode() + " vào quỹ.";
                     notificationService.createUserNotification(
-                            fund.getOwner().getUserId(),
+                            currentFund.getOwner().getUserId(),
                             com.example.financeapp.notification.entity.Notification.NotificationType.SYSTEM_ANNOUNCEMENT,
                             title,
                             msg,
-                            fund.getFundId(),
+                            currentFund.getFundId(),
                             "FUND_AUTO_DEPOSIT_RECOVERY_SUCCESS"
                     );
                 } catch (Exception ignore) {

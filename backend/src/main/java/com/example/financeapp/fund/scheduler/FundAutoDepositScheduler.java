@@ -113,13 +113,11 @@ public class FundAutoDepositScheduler {
                 try {
                     var sourceWallet = fund.getSourceWallet();
                     if (sourceWallet != null && fund.getAutoDepositAmount() != null) {
-                        java.math.BigDecimal shortage = fund.getAutoDepositAmount().subtract(
-                                sourceWallet.getBalance() != null ? sourceWallet.getBalance() : java.math.BigDecimal.ZERO);
-                        if (shortage.compareTo(java.math.BigDecimal.ZERO) > 0) {
-                            fund.setPendingAutoTopupAmount(shortage);
-                            fund.setPendingAutoTopupAt(LocalDateTime.now());
-                            fundRepository.save(fund);
-                        }
+                        // Khi nạp tự động thất bại do không đủ số dư, toàn bộ số tiền cần nạp sẽ được đưa vào pending
+                        // (vì giao dịch nạp trước đó thất bại hoàn toàn, chưa trừ tiền ví)
+                        fund.setPendingAutoTopupAmount(fund.getAutoDepositAmount());
+                        fund.setPendingAutoTopupAt(LocalDateTime.now());
+                        fundRepository.save(fund);
                     }
                 } catch (Exception ignore) {
                     // ignore pending set errors

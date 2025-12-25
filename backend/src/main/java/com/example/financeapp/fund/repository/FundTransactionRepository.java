@@ -15,6 +15,7 @@ public interface FundTransactionRepository extends JpaRepository<FundTransaction
         JOIN FETCH tx.fund f
         LEFT JOIN FETCH tx.performedBy u
         WHERE f.fundId = :fundId
+          AND tx.status = com.example.financeapp.fund.entity.FundTransactionStatus.SUCCESS
         ORDER BY tx.createdAt DESC
         """)
     List<FundTransaction> findByFundId(@Param("fundId") Long fundId, Pageable pageable);

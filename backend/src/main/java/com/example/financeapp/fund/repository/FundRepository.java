@@ -347,5 +347,9 @@ public interface FundRepository extends JpaRepository<Fund, Long> {
           AND (f.deleted = false OR f.deleted IS NULL)
         """)
     long countBySourceWallet_WalletIdAndDeletedFalse(@Param("walletId") Long walletId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT f FROM Fund f WHERE f.fundId = :id")
+    java.util.Optional<Fund> findByIdWithLock(@Param("id") Long id);
 }
 

@@ -182,12 +182,16 @@ public class ExportServiceImpl implements ExportService {
             transfers = walletTransferRepository.findByWalletIdIncludingDeleted(request.getWalletId());
             wallet = walletRepository.findById(request.getWalletId()).orElse(null);
 
-            // Lọc transfers theo date range
-            if (startDate != null || endDate != null) {
+            // Lọc transfers theo date range và status COMPLETED
+            if (transfers != null) {
                 final LocalDate finalStartDate = startDate;
                 final LocalDate finalEndDate = endDate;
                 transfers = transfers.stream()
                         .filter(t -> {
+                            // Chỉ lấy giao dịch COMPLETED
+                            if (t.getStatus() != WalletTransfer.TransferStatus.COMPLETED) {
+                                return false;
+                            }
                             if (t.getTransferDate() == null) return false;
                             LocalDate txDate = t.getTransferDate().toLocalDate();
                             if (finalStartDate != null && txDate.isBefore(finalStartDate)) {

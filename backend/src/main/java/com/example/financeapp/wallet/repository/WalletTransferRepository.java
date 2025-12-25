@@ -23,10 +23,11 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
             "LEFT JOIN FETCH t.toWallet " +
             "LEFT JOIN FETCH t.user " +
             "WHERE t.user.userId = :userId " +
+            "AND t.status = com.example.financeapp.wallet.entity.WalletTransfer.TransferStatus.COMPLETED " +
             "ORDER BY t.transferDate DESC")
     List<WalletTransfer> findByUser_UserIdOrderByTransferDateDesc(@Param("userId") Long userId);
 
-    @Query(value = "SELECT * FROM wallet_transfers WHERE user_id = :userId ORDER BY transfer_date DESC", nativeQuery = true)
+    @Query(value = "SELECT * FROM wallet_transfers WHERE user_id = :userId AND status = 'COMPLETED' ORDER BY transfer_date DESC", nativeQuery = true)
     List<WalletTransfer> findAllByUser_UserIdOrderByTransferDateDescIncludingDeleted(@Param("userId") Long userId);
 
     /**
@@ -37,11 +38,12 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
             "LEFT JOIN FETCH t.fromWallet " +
             "LEFT JOIN FETCH t.toWallet " +
             "LEFT JOIN FETCH t.user " +
-            "WHERE t.fromWallet.walletId = :walletId OR t.toWallet.walletId = :walletId " +
+            "WHERE (t.fromWallet.walletId = :walletId OR t.toWallet.walletId = :walletId) " +
+            "AND t.status = com.example.financeapp.wallet.entity.WalletTransfer.TransferStatus.COMPLETED " +
             "ORDER BY t.transferDate DESC")
     List<WalletTransfer> findByWalletId(@Param("walletId") Long walletId);
 
-    @Query(value = "SELECT * FROM wallet_transfers WHERE from_wallet_id = :walletId OR to_wallet_id = :walletId ORDER BY transfer_date DESC", nativeQuery = true)
+    @Query(value = "SELECT * FROM wallet_transfers WHERE (from_wallet_id = :walletId OR to_wallet_id = :walletId) AND status = 'COMPLETED' ORDER BY transfer_date DESC", nativeQuery = true)
     List<WalletTransfer> findByWalletIdIncludingDeleted(@Param("walletId") Long walletId);
 
     /**
@@ -59,6 +61,7 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
      */
     @Query(value = "SELECT * FROM wallet_transfers t " +
             "WHERE t.user_id = :userId " +
+            "AND t.status = 'COMPLETED' " +
             "ORDER BY t.transfer_date DESC", nativeQuery = true)
     List<WalletTransfer> findByUser_UserIdOrderByTransferDateDescIncludingDeleted(@Param("userId") Long userId);
 
@@ -67,6 +70,7 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
      */
     @Query(value = "SELECT * FROM wallet_transfers t " +
             "WHERE (t.from_wallet_id = :walletId OR t.to_wallet_id = :walletId) " +
+            "AND t.status = 'COMPLETED' " +
             "ORDER BY t.transfer_date DESC", nativeQuery = true)
     List<WalletTransfer> findDetailedByWalletIdIncludingDeleted(@Param("walletId") Long walletId);
 
@@ -76,6 +80,7 @@ public interface WalletTransferRepository extends JpaRepository<WalletTransfer, 
     @Query("SELECT t FROM WalletTransfer t " +
             "WHERE t.user.userId = :userId " +
             "AND t.transferDate BETWEEN :startDate AND :endDate " +
+            "AND t.status = com.example.financeapp.wallet.entity.WalletTransfer.TransferStatus.COMPLETED " +
             "ORDER BY t.transferDate DESC")
     List<WalletTransfer> findByUserAndDateRange(
             @Param("userId") Long userId,
