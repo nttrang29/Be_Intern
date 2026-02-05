@@ -1,9 +1,8 @@
-# 📌 Backend - Ứng dụng Quản Lý Tài Chính Cá Nhân
-# Đây chỉ là backend,hãy truy cập đường dẫn sau để vào frontend:"https://github.com/VinhTri/Fe_project_final"
-## 📝 Giới thiệu
+# Backend - Ứng dụng Quản Lý Tài Chính Cá Nhân
+## Giới thiệu
 Ứng dụng quản lý tài chính cá nhân giúp người dùng theo dõi và kiểm soát chi tiêu một cách thông minh. Hệ thống cung cấp đầy đủ các tính năng:
 
-### 🔍 Chức năng chính
+### Chức năng chính
 - **Tổng quan**: Hiển thị dashboard với số dư, thu chi gần đây, biểu đồ thống kê.
 - **Quản lý Ví**: Tạo và quản lý nhiều ví (tiền mặt, ngân hàng, ví điện tử).
 - **Quỹ tiết kiệm**: Thiết lập và theo dõi các quỹ cho mục tiêu tài chính dài hạn.
