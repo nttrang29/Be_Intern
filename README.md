@@ -15,7 +15,7 @@
 
 Ứng dụng được thiết kế theo kiến trúc **RESTful API**, dễ dàng tích hợp với frontend hoặc mobile app.
 
-## 🛠 Công nghệ sử dụng
+## Công nghệ sử dụng
 - **Ngôn ngữ**: Java 17+
 - **Framework**: Spring Boot
 - **Database**: MySQL / PostgreSQL
